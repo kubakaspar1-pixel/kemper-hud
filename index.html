@@ -60,6 +60,7 @@
   .slot.on{background:linear-gradient(180deg,#1d2a22,#15191f);border-color:#2f6b48}
   .slot.on .lbl{color:var(--on)}
   .slot.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--on)}
+  .slot.press{transform:scale(.97);filter:brightness(1.25)}
 
   /* ---- ladicka ---- */
   .tuner{position:fixed;inset:0;background:rgba(8,10,13,.985);z-index:30;
@@ -102,6 +103,7 @@
   <span class="dot" id="dot"></span>
   <span id="status">odpojeno</span>
   <span class="sp"></span>
+  <button class="ico" id="lockBtn" title="Zámek ovládání">🔓</button>
   <button class="ico" id="fsBtn" title="Fullscreen">⛶</button>
   <button class="ico" id="cfgBtn" title="Nastavení">⚙</button>
 </header>
@@ -152,6 +154,11 @@
         se pak neobjeví, ať Player posílá cokoliv. Zapnutím si řekneš i o data
         ladičky (bit 5 v beaconu).</span></div>
 
+    <div class="row"><label>MIDI kanál</label>
+      <select id="chSel"></select>
+      <span class="note-sm" style="flex:1">Na kterém kanálu Player poslouchá.
+        Když ovládání nereaguje, je to první, co zkusit.</span></div>
+
     <div class="row"><label>Provoz</label>
       <span class="note-sm" style="flex:1" id="stats">–</span></div>
 
@@ -190,9 +197,12 @@ let TUNER_ON = LS_BOOT('tuner', false);   // bit 5 beaconu = posílej data ladi�
    // ladička překryla rig, přičemž nota ani odchylka nikdy nepřišly.
 const FLAGS = init => (init?1:0) | (1<<1) /*sysex*/ | (TUNER_ON ? (1<<5) : 0);
 
+// cc = CC pro zap/vyp slotu; DLY/REV ve verzi se spilloverem, aby dozněly
 const SLOTS = [
-  {key:'A',page:0x32},{key:'B',page:0x33},{key:'C',page:0x34},{key:'D',page:0x35},
-  {key:'X',page:0x38},{key:'MOD',page:0x3a},{key:'DLY',page:0x3c},{key:'REV',page:0x3d},
+  {key:'A',page:0x32,cc:17},{key:'B',page:0x33,cc:18},
+  {key:'C',page:0x34,cc:19},{key:'D',page:0x35,cc:20},
+  {key:'X',page:0x38,cc:22},{key:'MOD',page:0x3a,cc:24},
+  {key:'DLY',page:0x3c,cc:27},{key:'REV',page:0x3d,cc:29},
 ];
 const P_TYPE=0x00, P_STATE=0x03;
 const PAGE_STRINGS=0x00, S_RIG_NAME=0x01, S_RIG_DATE=0x03;
@@ -207,6 +217,8 @@ const LS = {
   set:(k,v)=>{ try{ localStorage.setItem('khud.'+k, JSON.stringify(v)); }catch(e){} }
 };
 let PRODUCT = LS.get('product', 2);
+let CHANNEL = LS.get('channel', 1);      // MIDI kanál, na kterém Player poslouchá
+let LOCKED  = LS.get('locked', false);   // zámek proti nechtěnému šlápnutí
 let fxNames = LS.get('fx', {});
 const state = { rigName:'', rigDate:'', pc:null, bankMsb:null, slots:{}, tuner:{on:false,note:0,dev:8192} };
 let midi=null, input=null, output=null, beaconT=null, pollT=null, wdT=null, wakeLock=null;
@@ -231,6 +243,18 @@ function send(b){ if(!output) return; try{ output.send(b); log('tx',b); }catch(e
 const reqParam  = (page,param)=>send(sysex(FN.REQ_PARAM,[page,param]));
 const reqString = id=>send(sysex(FN.REQ_STRING,[PAGE_STRINGS,id]));
 const beacon    = (init=false)=>send(sysex(FN.BEACON,[0x40,PARAM_SET,FLAGS(init),LEASE_SEC/2|0]));
+const cc        = (num,val)=>send([0xb0 | ((CHANNEL-1)&0x0f), num, val]);
+
+function toggleSlot(key){
+  const slot = SLOTS.find(s=>s.key===key);
+  const st = state.slots[key];
+  if(!slot || !st || !st.type) return;          // prázdný slot nemá co vypínat
+  const want = !st.on;
+  cc(slot.cc, want ? 1 : 0);
+  st.on = want; render();                       // okamžitá odezva
+  // za chvíli si vyžádáme skutečný stav; kdyby to neprošlo, dlaždice se vrátí
+  setTimeout(()=>reqParam(slot.page, P_STATE), 150);
+}
 
 function refreshAll(){
   reqString(S_RIG_NAME); reqString(S_RIG_DATE);
@@ -345,16 +369,37 @@ el('slots').innerHTML = SLOTS.map(s=>`
     <div class="lbl">${s.key}</div><div class="type">—</div><div class="tid"></div>
   </div>`).join('');
 
-// klepnuti na dlazdici = pojmenovat efekt v tomto slotu
-let editType = null;
-el('slots').addEventListener('click', e=>{
-  const box = e.target.closest('.slot'); if(!box) return;
-  const st = state.slots[box.dataset.slot]; if(!st || !st.type) return;
+// klepnutí = zap/vyp efektu, přidržení = pojmenovat
+let editType = null, holdT = null, held = false;
+
+function openNameDlg(key){
+  const st = state.slots[key]; if(!st || !st.type) return;
   editType = st.type;
-  el('nameTitle').textContent = `Slot ${box.dataset.slot} · typ #${st.type}`;
+  el('nameTitle').textContent = `Slot ${key} · typ #${st.type}`;
   el('nameInput').value = fxNames[st.type] || '';
   el('nameDlg').classList.add('show'); el('nameInput').focus();
+}
+
+el('slots').addEventListener('pointerdown', e=>{
+  const box = e.target.closest('.slot'); if(!box) return;
+  held = false;
+  box.classList.add('press');
+  holdT = setTimeout(()=>{ held = true; box.classList.remove('press');
+                           openNameDlg(box.dataset.slot); }, 500);
 });
+el('slots').addEventListener('pointerup', e=>{
+  clearTimeout(holdT);
+  const box = e.target.closest('.slot'); if(!box) return;
+  box.classList.remove('press');
+  if(held) return;                                   // bylo to přidržení
+  if(LOCKED){ flashLock(); return; }
+  toggleSlot(box.dataset.slot);
+});
+el('slots').addEventListener('pointercancel', ()=>{
+  clearTimeout(holdT);
+  document.querySelectorAll('.slot.press').forEach(b=>b.classList.remove('press'));
+});
+el('slots').addEventListener('contextmenu', e=>e.preventDefault());
 el('tuner').addEventListener('click', ()=>{
   tunerMuted = Date.now();                    // 20 s klid, pak se může vrátit
   el('tuner').classList.remove('show');
@@ -389,6 +434,10 @@ const tunLabel = ()=> el('tunBtn').textContent = TUNER_ON ? 'zapnutá' : 'vypnut
 el('tunBtn').onclick = ()=>{ TUNER_ON=!TUNER_ON; LS.set('tuner',TUNER_ON); tunLabel();
                              if(output) start(); };
 tunLabel();
+el('chSel').innerHTML = Array.from({length:16},(_,i)=>
+  `<option value="${i+1}">${i+1}</option>`).join('');
+el('chSel').value = String(CHANNEL);
+el('chSel').onchange = e=>{ CHANNEL=+e.target.value; LS.set('channel',CHANNEL); };
 el('prodSel').value = String(PRODUCT);
 el('prodSel').onchange = e=>{ PRODUCT=+e.target.value; LS.set('product',PRODUCT); if(output) start(); };
 
@@ -405,6 +454,17 @@ async function keepAwake(){
       el('wlNote').textContent = 'Displej je držený rozsvícený (Wake Lock aktivní).';
     }
   }catch(e){ el('wlNote').textContent = 'Wake Lock nedostupný – vypni v Androidu uspávání displeje ručně.'; }
+}
+function lockLabel(){
+  el('lockBtn').textContent = LOCKED ? '🔒' : '🔓';
+  el('lockBtn').style.color = LOCKED ? 'var(--accent)' : '';
+}
+el('lockBtn').onclick = ()=>{ LOCKED=!LOCKED; LS.set('locked',LOCKED); lockLabel(); };
+lockLabel();
+function flashLock(){
+  const b = el('lockBtn');
+  b.animate([{transform:'scale(1)'},{transform:'scale(1.5)'},{transform:'scale(1)'}],
+            {duration:260});
 }
 el('fsBtn').onclick = goStage;
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') keepAwake(); });
