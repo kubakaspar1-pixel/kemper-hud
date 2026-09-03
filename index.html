@@ -60,7 +60,11 @@
   .slot.on{background:linear-gradient(180deg,#1d2a22,#15191f);border-color:#2f6b48}
   .slot.on .lbl{color:var(--on)}
   .slot.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--on)}
-  .slot.press{transform:scale(.97);filter:brightness(1.25)}
+  .slot:active{transform:scale(.97);filter:brightness(1.25)}
+  .slots.edit .slot{border-style:dashed;border-color:var(--accent)}
+  .slots.edit .slot:not(.empty)::after{content:"✎";position:absolute;top:8px;right:10px;
+    color:var(--accent);font-size:14px}
+  #editHint{font-size:11px;color:var(--accent);letter-spacing:.06em;text-transform:uppercase}
 
   /* ---- ladicka ---- */
   .tuner{position:fixed;inset:0;background:rgba(8,10,13,.985);z-index:30;
@@ -103,6 +107,8 @@
   <span class="dot" id="dot"></span>
   <span id="status">odpojeno</span>
   <span class="sp"></span>
+  <span id="editHint" hidden>režim pojmenování</span>
+  <button class="ico" id="editBtn" title="Režim pojmenování efektů">✎</button>
   <button class="ico" id="lockBtn" title="Zámek ovládání">🔓</button>
   <button class="ico" id="fsBtn" title="Fullscreen">⛶</button>
   <button class="ico" id="cfgBtn" title="Nastavení">⚙</button>
@@ -369,8 +375,10 @@ el('slots').innerHTML = SLOTS.map(s=>`
     <div class="lbl">${s.key}</div><div class="type">—</div><div class="tid"></div>
   </div>`).join('');
 
-// klepnutí = zap/vyp efektu, přidržení = pojmenovat
-let editType = null, holdT = null, held = false;
+// Klepnutí = zap/vyp. Pojmenování má vlastní režim, který se zapíná ✎ v liště.
+// Časované přidržení se neosvědčilo - 500 ms pevnější klepnutí na telefonu
+// snadno překročí a otevřelo se přejmenování místo přepnutí.
+let editType = null, EDIT = false;      // EDIT se schválně neukládá
 
 function openNameDlg(key){
   const st = state.slots[key]; if(!st || !st.type) return;
@@ -380,30 +388,20 @@ function openNameDlg(key){
   el('nameDlg').classList.add('show'); el('nameInput').focus();
 }
 
-el('slots').addEventListener('pointerdown', e=>{
+el('slots').addEventListener('click', e=>{
   const box = e.target.closest('.slot'); if(!box) return;
-  held = false;
-  box.classList.add('press');
-  holdT = setTimeout(()=>{ held = true; box.classList.remove('press');
-                           openNameDlg(box.dataset.slot); }, 500);
-});
-el('slots').addEventListener('pointerup', e=>{
-  clearTimeout(holdT);
-  const box = e.target.closest('.slot'); if(!box) return;
-  box.classList.remove('press');
-  if(held) return;                                   // bylo to přidržení
+  if(EDIT){ openNameDlg(box.dataset.slot); return; }
   if(LOCKED){ flashLock(); return; }
   toggleSlot(box.dataset.slot);
 });
-el('slots').addEventListener('pointercancel', ()=>{
-  clearTimeout(holdT);
-  document.querySelectorAll('.slot.press').forEach(b=>b.classList.remove('press'));
-});
-el('slots').addEventListener('contextmenu', e=>e.preventDefault());
-el('tuner').addEventListener('click', ()=>{
-  tunerMuted = Date.now();                    // 20 s klid, pak se může vrátit
-  el('tuner').classList.remove('show');
-});
+
+function editLabel(){
+  el('editBtn').style.color = EDIT ? 'var(--accent)' : '';
+  el('slots').classList.toggle('edit', EDIT);
+  el('editHint').hidden = !EDIT;
+}
+el('editBtn').onclick = ()=>{ EDIT=!EDIT; editLabel(); };
+
 el('nameCancel').onclick = ()=> el('nameDlg').classList.remove('show');
 el('nameSave').onclick = ()=>{
   const v = el('nameInput').value.trim();
@@ -461,6 +459,7 @@ function lockLabel(){
 }
 el('lockBtn').onclick = ()=>{ LOCKED=!LOCKED; LS.set('locked',LOCKED); lockLabel(); };
 lockLabel();
+editLabel();
 function flashLock(){
   const b = el('lockBtn');
   b.animate([{transform:'scale(1)'},{transform:'scale(1.5)'},{transform:'scale(1)'}],
