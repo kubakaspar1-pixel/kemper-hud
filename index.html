@@ -152,6 +152,9 @@
         se pak neobjeví, ať Player posílá cokoliv. Zapnutím si řekneš i o data
         ladičky (bit 5 v beaconu).</span></div>
 
+    <div class="row"><label>Provoz</label>
+      <span class="note-sm" style="flex:1" id="stats">–</span></div>
+
     <div class="row"><label>MIDI log</label><button class="btn" id="monBtn">zap/vyp</button></div>
     <div class="mon" id="mon" style="display:none"></div>
   </div>
@@ -178,7 +181,10 @@ const FN  = { SET:0x01, REQ_PARAM:0x41, REQ_STRING:0x43, RESP_PARAM:0x01, RESP_S
 
 const PARAM_SET = 0x02;   // sada: rig name + slot type/state + tuner
 const LEASE_SEC = 10;     // beacon lease; preposilat po polovine
-const POLL_MS   = 3000;   // zaloha: prepnuti rigu priamo na pristroji neposila PC
+const POLL_MS   = 15000;  // Záloha, ne hlavní kanál. Beacon posílá změny sám;
+                          // tohle jen podchytí přepnutí rigu přímo na přístroji,
+                          // které neposílá Program Change. Při 3 s to dělalo
+                          // 6 odpovědí/s, což je zbytečný provoz.
 let TUNER_ON = LS_BOOT('tuner', false);   // bit 5 beaconu = posílej data ladičky.
    // Default vypnuto: Player pak hlásil tuner mode = on a celoobrazovková
    // ladička překryla rig, přičemž nota ani odchylka nikdy nepřišly.
@@ -208,7 +214,9 @@ let lastRx=0;        // cokoliv z přístroje (i Active Sensing)
 let lastSysex=0;     // skutečná SysEx odpověď od Kemperu
 let lastTuner=0;     // poslední nota / odchylka z ladičky
 let tunerMuted=0;    // kdy uživatel ladičku odklepl
-let rxCount=0;
+let rxCount=0, rateCount=0, rxRate=0;
+const traffic = {};                  // co vlastně chodí, podle adresy
+const bump = k => traffic[k] = (traffic[k]||0)+1;
 
 /* ================================ MIDI ================================== */
 function log(dir, bytes){
@@ -234,11 +242,13 @@ function start(){
   beaconT = setInterval(()=>beacon(false), LEASE_SEC*500);
   pollT   = setInterval(refreshAll, POLL_MS);
   wdT     = setInterval(()=>{
+    rxRate = rateCount / 0.7; rateCount = 0;       // zpráv za sekundu
     const sx = Date.now()-lastSysex, any = Date.now()-lastRx;
-    if(sx < 4000)      setStatus('live', `připojeno · ${rxCount} zpráv`);
+    if(sx < 20000)      setStatus('live', 'připojeno');
     else if(any < 2000) setStatus('warn', 'přístroj žije, ale neodpovídá');
     else                setStatus('off',  'ticho na lince');
-    if(sx > 4000) beacon(true);           // neodpovídá -> znovu init
+    if(sx > 20000) beacon(true);          // neodpovídá -> znovu init
+    if(el('cfg').classList.contains('show')) stats();
   }, 700);
 }
 
@@ -249,12 +259,13 @@ function onMidi(e){
     if(d[1]!==MFG[0]||d[2]!==MFG[1]||d[3]!==MFG[2]) return;
     const fn=d[6], page=d[8], param=d[9];
     if(fn===FN.BEACON) return;                        // sense tick (~500 ms)
-    lastSysex = Date.now(); rxCount++;
+    lastSysex = Date.now(); rxCount++; rateCount++;
 
     if(fn===FN.RESP_STRING && page===PAGE_STRINGS){
       const txt = String.fromCharCode(...d.slice(10,d.length-1)).replace(/[^\x20-\x7e]/g,'').trim();
-      if(param===S_RIG_NAME) state.rigName=txt;
-      else if(param===S_RIG_DATE) state.rigDate=txt;
+      if(param===S_RIG_NAME){ state.rigName=txt; bump('název rigu'); }
+      else if(param===S_RIG_DATE){ state.rigDate=txt; bump('datum rigu'); }
+      else bump(`string ${param.toString(16)}`);
       return render();
     }
     if(fn===FN.RESP_PARAM){
@@ -262,17 +273,21 @@ function onMidi(e){
       const slot = SLOTS.find(s=>s.page===page);
       if(slot){
         const s = state.slots[slot.key] ||= {type:0,on:false};
-        if(param===P_TYPE)  s.type = val;
-        if(param===P_STATE) s.on   = val>0;
+        if(param===P_TYPE)  { s.type = val; bump(`slot ${slot.key} typ`); }
+        if(param===P_STATE) { s.on = val>0; bump(`slot ${slot.key} stav`); }
         return render();
       }
       if(page===TUNER.mode[0]&&param===TUNER.mode[1]){
+        bump('ladička: režim');
         if(!(val>0)) tunerMuted = 0;          // ladička vypnuta -> reset ztišení
         state.tuner.on = val>0; return render(); }
       if(page===TUNER.note[0]&&param===TUNER.note[1]){
+        bump('ladička: nota');
         state.tuner.note=val; lastTuner=Date.now(); return render(); }
       if(page===TUNER.dev[0] &&param===TUNER.dev[1] ){
+        bump('ladička: odchylka');
         state.tuner.dev=val;  lastTuner=Date.now(); return render(); }
+      bump(`neznámé ${page.toString(16)}/${param.toString(16)}`);
     }
     return;
   }
@@ -361,7 +376,13 @@ el('fxClear').onclick = ()=>{ if(confirm('Smazat všechny názvy efektů?')){ fx
 el('fxCopy').onclick  = ()=> navigator.clipboard?.writeText(el('fxJson').value);
 syncFxJson();
 
-el('cfgBtn').onclick   = ()=> el('cfg').classList.add('show');
+function stats(){
+  const rows = Object.entries(traffic).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  el('stats').innerHTML =
+    `${rxRate.toFixed(1)} zpráv/s · celkem ${rxCount}<br>` +
+    (rows.length ? rows.map(([k,v])=>`${k}: ${v}`).join(' · ') : 'nic nepřišlo');
+}
+el('cfgBtn').onclick   = ()=>{ stats(); el('cfg').classList.add('show'); };
 el('cfgClose').onclick = ()=> el('cfg').classList.remove('show');
 el('monBtn').onclick   = ()=>{ const m=el('mon'); m.style.display = m.style.display==='none'?'block':'none'; };
 const tunLabel = ()=> el('tunBtn').textContent = TUNER_ON ? 'zapnutá' : 'vypnutá';
