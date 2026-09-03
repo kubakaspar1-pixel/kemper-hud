@@ -148,8 +148,9 @@
 
     <div class="row"><label>Ladička</label>
       <button class="btn" id="tunBtn">–</button>
-      <span class="note-sm" style="flex:1">Zapíná bit 5 v beaconu. Když je vypnutá,
-        Player data ladičky vůbec neposílá.</span></div>
+      <span class="note-sm" style="flex:1">Default vypnutá — celoobrazovkový překryv
+        se pak neobjeví, ať Player posílá cokoliv. Zapnutím si řekneš i o data
+        ladičky (bit 5 v beaconu).</span></div>
 
     <div class="row"><label>MIDI log</label><button class="btn" id="monBtn">zap/vyp</button></div>
     <div class="mon" id="mon" style="display:none"></div>
@@ -298,10 +299,14 @@ function render(){
     box.querySelector('.tid').textContent  = st.type ? '#'+st.type : '';
   });
 
-  // Ladičku pustíme jen když Player hlásí tuner mode A ZÁROVEŇ tečou nota
-  // nebo odchylka. Bez té druhé podmínky přebije rig prázdným "C / 0 ct".
-  // A vždy se dá odklepnout - žádný překryv nesmí uživatele uvěznit.
-  const live = state.tuner.on
+  // Ladička je default VYPNUTÁ a pak se nezobrazí nikdy, ať Player posílá
+  // cokoliv. Samotné shození bitu 5 v beaconu totiž nestačí - parametrická
+  // sada 2, kterou si vyžádám kvůli názvu rigu a slotům, tuner data obsahuje
+  // taky, takže chodí i bez vyžádání.
+  // Když si ji někdo zapne: potřebuje skutečnou notu nebo odchylku (jinak by
+  // přebila rig prázdným "C / 0 ct") a vždycky se dá odklepnout.
+  const live = TUNER_ON
+            && state.tuner.on
             && (Date.now() - lastTuner < 1500)
             && (Date.now() - tunerMuted > 20000);
   const t=el('tuner'); t.classList.toggle('show', live);
