@@ -31,8 +31,15 @@
   .dot.warn{background:var(--accent)}
   #status{font-size:11px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
   header .sp{flex:1}
-  .ico{background:none;border:0;color:var(--dim);padding:6px 10px;font-size:18px;line-height:1}
+  .ico{background:none;border:0;color:var(--dim);padding:8px 10px;font-size:18px;line-height:1}
   .ico:active{color:var(--fg)}
+  /* Textová tlačítka místo ikon - dingbaty jako ✎ se na Androidu nemusí
+     vykreslit vůbec a malý šedý glyph se přehlédne. */
+  .pill{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+    border-radius:999px;padding:7px 13px;font-size:12px;font-weight:600;
+    letter-spacing:.04em;line-height:1;white-space:nowrap}
+  .pill.act{background:var(--accent);border-color:var(--accent);color:#1a1206}
+  .pill.lock{background:#3a2a14;border-color:var(--accent);color:var(--accent)}
 
   main{flex:1;display:flex;flex-direction:column;min-height:0;padding:12px;gap:12px}
 
@@ -62,9 +69,9 @@
   .slot.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--on)}
   .slot:active{transform:scale(.97);filter:brightness(1.25)}
   .slots.edit .slot{border-style:dashed;border-color:var(--accent)}
-  .slots.edit .slot:not(.empty)::after{content:"✎";position:absolute;top:8px;right:10px;
-    color:var(--accent);font-size:14px}
-  #editHint{font-size:11px;color:var(--accent);letter-spacing:.06em;text-transform:uppercase}
+  .slots.edit .slot:not(.empty)::after{content:"✏️";position:absolute;top:7px;right:9px;
+    font-size:13px}
+
 
   /* ---- ladicka ---- */
   .tuner{position:fixed;inset:0;background:rgba(8,10,13,.985);z-index:30;
@@ -107,10 +114,9 @@
   <span class="dot" id="dot"></span>
   <span id="status">odpojeno</span>
   <span class="sp"></span>
-  <span id="editHint" hidden>režim pojmenování</span>
-  <button class="ico" id="editBtn" title="Režim pojmenování efektů">✎</button>
-  <button class="ico" id="lockBtn" title="Zámek ovládání">🔓</button>
-  <button class="ico" id="fsBtn" title="Fullscreen">⛶</button>
+  <button class="pill" id="editBtn">názvy</button>
+  <button class="pill" id="lockBtn">odemčeno</button>
+  <button class="ico" id="fsBtn" title="Celá obrazovka">⛶</button>
   <button class="ico" id="cfgBtn" title="Nastavení">⚙</button>
 </header>
 
@@ -396,9 +402,9 @@ el('slots').addEventListener('click', e=>{
 });
 
 function editLabel(){
-  el('editBtn').style.color = EDIT ? 'var(--accent)' : '';
+  el('editBtn').textContent = EDIT ? 'názvy: zapnuto' : 'názvy';
+  el('editBtn').className = 'pill' + (EDIT ? ' act' : '');
   el('slots').classList.toggle('edit', EDIT);
-  el('editHint').hidden = !EDIT;
 }
 el('editBtn').onclick = ()=>{ EDIT=!EDIT; editLabel(); };
 
@@ -454,8 +460,8 @@ async function keepAwake(){
   }catch(e){ el('wlNote').textContent = 'Wake Lock nedostupný – vypni v Androidu uspávání displeje ručně.'; }
 }
 function lockLabel(){
-  el('lockBtn').textContent = LOCKED ? '🔒' : '🔓';
-  el('lockBtn').style.color = LOCKED ? 'var(--accent)' : '';
+  el('lockBtn').textContent = LOCKED ? 'zamčeno' : 'odemčeno';
+  el('lockBtn').className = 'pill' + (LOCKED ? ' lock' : '');
 }
 el('lockBtn').onclick = ()=>{ LOCKED=!LOCKED; LS.set('locked',LOCKED); lockLabel(); };
 lockLabel();
