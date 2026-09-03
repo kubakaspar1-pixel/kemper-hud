@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kemper MIDI diagnostika</title>
+<style>
+  :root{--bg:#0b0d10;--panel:#15191f;--line:#2a313b;--fg:#f2f5f8;--dim:#8b95a3;
+        --ok:#3ddc84;--no:#ff5d5d;--acc:#ff8a3d}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:15px/1.45 system-ui,-apple-system,Roboto,sans-serif;padding:14px}
+  h1{font-size:17px;margin:0 0 4px}
+  p.sub{color:var(--dim);font-size:13px;margin:0 0 14px}
+  button{background:var(--acc);color:#1a1206;border:0;border-radius:10px;
+         padding:12px 18px;font:600 15px/1 inherit;margin:0 8px 12px 0}
+  button.sec{background:var(--panel);color:var(--fg);border:1px solid var(--line)}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+          padding:12px;margin-bottom:12px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 8px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600}
+  code,pre{font-family:ui-monospace,Menlo,monospace;font-size:11px}
+  pre{white-space:pre-wrap;word-break:break-all;margin:0;color:#9fb0c3}
+  .ok{color:var(--ok);font-weight:700}
+  .no{color:var(--no)}
+  .hit{background:#16241c}
+</style>
+</head>
+<body>
+<h1>Kemper MIDI diagnostika</h1>
+<p class="sub">Vyzkouší kombinace product byte / device ID / beacon a vypíše, na co Player odpoví.
+Nech Player zapnutý a připojený, pak spusť test.</p>
+
+<button id="run">Spustit test</button>
+<button class="sec" id="copy">Kopírovat výsledek</button>
+
+<section><h2>MIDI porty</h2><div id="ports">…</div></section>
+<section><h2>Výsledky</h2><div id="res">Zatím nic. Klikni na Spustit test.</div></section>
+<section><h2>Vše, co přišlo (bez Active Sensing a Clock)</h2><pre id="raw"></pre></section>
+
+<script>
+const el = id => document.getElementById(id);
+const hex = b => [...b].map(x=>x.toString(16).padStart(2,'0')).join(' ');
+let midi = null, rx = [], raw = [];
+
+function onMsg(e){
+  const d = e.data;
+  if(d[0] === 0xfe || d[0] === 0xf8) return;      // Active Sensing / Clock zahodit
+  rx.push(d);
+  raw.push(hex(d));
+  el('raw').textContent = raw.slice(-60).join('\n');
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function msg(prod, dev, fn, tail){
+  return [0xf0, 0x00, 0x20, 0x33, prod, dev, fn, 0x00, ...tail, 0xf7];
+}
+
+async function trial(out, prod, dev, beacon){
+  rx = [];
+  const sent = [];
+  const put = m => { try{ out.send(m); sent.push(hex(m)); }catch(err){ sent.push('CHYBA: '+err); } };
+
+  if(beacon){                                    // 0x7e 00 40 <set> <flags> <lease/2>
+    put(msg(prod, dev, 0x7e, [0x40, beacon.set, beacon.flags | 1, 0x04]));
+    await sleep(120);
+    put(msg(prod, dev, 0x7e, [0x40, beacon.set, beacon.flags, 0x04]));
+    await sleep(120);
+  }
+  put(msg(prod, dev, 0x43, [0x00, 0x01]));       // název rigu (string)
+  await sleep(200);
+  put(msg(prod, dev, 0x41, [0x32, 0x00]));       // typ efektu ve slotu A
+  await sleep(400);
+  return {sent, got: rx.map(hex)};
+}
+
+async function run(){
+  el('res').innerHTML = 'Běží…';
+  const outs = [...midi.outputs.values()];
+  const rows = [];
+  const beacons = [
+    {name:'bez beaconu', b:null},
+    {name:'beacon set 2, flags 0x22', b:{set:0x02, flags:0x22}},
+    {name:'beacon set 1, flags 0x2e', b:{set:0x01, flags:0x2e}},
+  ];
+  for(const out of outs){
+    for(const prod of [0x02, 0x00]){
+      for(const dev of [0x7f, 0x00]){
+        for(const bc of beacons){
+          const r = await trial(out, prod, dev, bc.b);
+          rows.push({port: out.name, prod, dev, beacon: bc.name, got: r.got});
+        }
+      }
+    }
+  }
+  const hits = rows.filter(r => r.got.length);
+  el('res').innerHTML = `
+    <p style="margin:0 0 10px">${hits.length
+      ? `<span class="ok">Odpověď přišla u ${hits.length} z ${rows.length} kombinací.</span>`
+      : `<span class="no">Žádná kombinace neodpověděla (${rows.length} zkoušek).</span>`}</p>
+    <table><tr><th>port</th><th>product</th><th>dev</th><th>beacon</th><th>odpověď</th></tr>
+    ${rows.map(r=>`<tr class="${r.got.length?'hit':''}">
+      <td>${r.port}</td><td>0x${r.prod.toString(16).padStart(2,'0')}</td>
+      <td>0x${r.dev.toString(16).padStart(2,'0')}</td><td>${r.beacon}</td>
+      <td>${r.got.length ? '<code>'+r.got.join('<br>')+'</code>' : '<span class="no">–</span>'}</td>
+    </tr>`).join('')}</table>`;
+  window.__report = rows;
+}
+
+el('copy').onclick = () => {
+  const t = 'PORTY\n' + el('ports').innerText + '\n\nVYSLEDKY\n' +
+            (window.__report||[]).map(r=>`${r.port} prod=0x${r.prod.toString(16)} dev=0x${r.dev.toString(16)} ${r.beacon} -> ${r.got.join(' | ')||'nic'}`).join('\n') +
+            '\n\nRAW\n' + el('raw').textContent;
+  navigator.clipboard?.writeText(t);
+  el('copy').textContent = 'Zkopírováno';
+};
+
+navigator.requestMIDIAccess({sysex:true}).then(a=>{
+  midi = a;
+  const list = arr => arr.length
+    ? `<table><tr><th>název</th><th>výrobce</th><th>id</th><th>stav</th></tr>` +
+      arr.map(p=>`<tr><td>${p.name}</td><td>${p.manufacturer||'–'}</td>
+                  <td><code>${p.id}</code></td><td>${p.state}/${p.connection}</td></tr>`).join('') +
+      `</table>` : '<span class="no">žádné</span>';
+  el('ports').innerHTML =
+    `<h2 style="margin-top:0">Vstupy (${a.inputs.size})</h2>` + list([...a.inputs.values()]) +
+    `<h2 style="margin-top:12px">Výstupy (${a.outputs.size})</h2>` + list([...a.outputs.values()]);
+  for(const i of a.inputs.values()) i.onmidimessage = onMsg;   // poslouchat na VŠECH vstupech
+  el('run').onclick = run;
+}).catch(e=>{
+  el('ports').innerHTML = `<span class="no">Web MIDI nedostupné: ${e}</span>`;
+});
+</script>
+</body>
+</html>

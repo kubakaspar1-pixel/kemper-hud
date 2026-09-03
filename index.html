@@ -23,8 +23,9 @@
   button,select{font:inherit}
 
   /* ---- horni lista ---- */
+  /* z-index nad ladičkou: na ⚙ se musí dát dosáhnout za všech okolností */
   header{display:flex;align-items:center;gap:10px;padding:8px 12px;flex:0 0 auto;
-    border-bottom:1px solid var(--line)}
+    border-bottom:1px solid var(--line);position:relative;z-index:35;background:var(--bg)}
   .dot{width:9px;height:9px;border-radius:50%;background:var(--off);flex:0 0 auto;transition:background .2s}
   .dot.live{background:var(--on);box-shadow:0 0 10px var(--on)}
   .dot.warn{background:var(--accent)}
@@ -71,6 +72,8 @@
   .tuner .bar .needle{position:absolute;top:4px;bottom:4px;width:14px;border-radius:7px;background:var(--on);
     left:50%;transform:translateX(-50%);transition:left .06s linear,background .12s}
   .tuner .cents{color:var(--dim);font-size:14px;font-variant-numeric:tabular-nums}
+  .tuner .esc{position:absolute;bottom:24px;left:0;right:0;text-align:center;
+    color:var(--dim);font-size:13px}
 
   /* ---- prekryvy ---- */
   .sheet{position:fixed;inset:0;background:rgba(6,8,11,.82);z-index:40;display:none;
@@ -117,6 +120,7 @@
   <div class="note" id="tNote">–</div>
   <div class="bar"><div class="center"></div><div class="needle" id="tNeedle"></div></div>
   <div class="cents" id="tCents"></div>
+  <div class="esc">klepnutím zavřeš</div>
 </div>
 
 <!-- nastaveni -->
@@ -141,6 +145,11 @@
     <textarea id="fxJson" spellcheck="false" placeholder='{"33":"Green Scream","113":"Hall Reverb"}'></textarea>
     <div class="note-sm">Klepnutím na dlaždici pojmenuješ efekt, který je právě v daném slotu.
       Kemper posílá jen číselné ID typu – tabulku si takhle postupně vyklikáš. JSON můžeš zálohovat.</div>
+
+    <div class="row"><label>Ladička</label>
+      <button class="btn" id="tunBtn">–</button>
+      <span class="note-sm" style="flex:1">Zapíná bit 5 v beaconu. Když je vypnutá,
+        Player data ladičky vůbec neposílá.</span></div>
 
     <div class="row"><label>MIDI log</label><button class="btn" id="monBtn">zap/vyp</button></div>
     <div class="mon" id="mon" style="display:none"></div>
@@ -169,7 +178,10 @@ const FN  = { SET:0x01, REQ_PARAM:0x41, REQ_STRING:0x43, RESP_PARAM:0x01, RESP_S
 const PARAM_SET = 0x02;   // sada: rig name + slot type/state + tuner
 const LEASE_SEC = 10;     // beacon lease; preposilat po polovine
 const POLL_MS   = 3000;   // zaloha: prepnuti rigu priamo na pristroji neposila PC
-const FLAGS = init => (init?1:0) | (1<<1) /*sysex*/ | (1<<5) /*tunemode*/;
+let TUNER_ON = LS_BOOT('tuner', false);   // bit 5 beaconu = posílej data ladičky.
+   // Default vypnuto: Player pak hlásil tuner mode = on a celoobrazovková
+   // ladička překryla rig, přičemž nota ani odchylka nikdy nepřišly.
+const FLAGS = init => (init?1:0) | (1<<1) /*sysex*/ | (TUNER_ON ? (1<<5) : 0);
 
 const SLOTS = [
   {key:'A',page:0x32},{key:'B',page:0x33},{key:'C',page:0x34},{key:'D',page:0x35},
@@ -181,6 +193,8 @@ const TUNER = { mode:[0x7f,0x7e], note:[0x7d,0x54], dev:[0x7c,0x0f] };
 
 /* ================================ stav ================================== */
 const el = id => document.getElementById(id);
+function LS_BOOT(k, d){ try{ const v=localStorage.getItem('khud.'+k);
+  return v==null ? d : JSON.parse(v); }catch(e){ return d; } }
 const LS = {
   get:(k,d)=>{ try{ const v=localStorage.getItem('khud.'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
   set:(k,v)=>{ try{ localStorage.setItem('khud.'+k, JSON.stringify(v)); }catch(e){} }
@@ -188,10 +202,16 @@ const LS = {
 let PRODUCT = LS.get('product', 2);
 let fxNames = LS.get('fx', {});
 const state = { rigName:'', rigDate:'', pc:null, bankMsb:null, slots:{}, tuner:{on:false,note:0,dev:8192} };
-let midi=null, input=null, output=null, beaconT=null, pollT=null, wdT=null, lastRx=0, wakeLock=null;
+let midi=null, input=null, output=null, beaconT=null, pollT=null, wdT=null, wakeLock=null;
+let lastRx=0;        // cokoliv z přístroje (i Active Sensing)
+let lastSysex=0;     // skutečná SysEx odpověď od Kemperu
+let lastTuner=0;     // poslední nota / odchylka z ladičky
+let tunerMuted=0;    // kdy uživatel ladičku odklepl
+let rxCount=0;
 
 /* ================================ MIDI ================================== */
 function log(dir, bytes){
+  if(dir==='rx' && (bytes[0]===0xfe || bytes[0]===0xf8)) return;   // Active Sensing / Clock
   const m = el('mon'); if(m.style.display==='none') return;
   m.insertAdjacentHTML('afterbegin',
     `<div class="${dir}">${dir==='tx'?'→':'←'} ${[...bytes].map(b=>b.toString(16).padStart(2,'0')).join(' ')}</div>`);
@@ -213,9 +233,11 @@ function start(){
   beaconT = setInterval(()=>beacon(false), LEASE_SEC*500);
   pollT   = setInterval(refreshAll, POLL_MS);
   wdT     = setInterval(()=>{
-    const age = Date.now()-lastRx;
-    setStatus(age<1500?'live':'warn', age<1500?'připojeno':'čekám na data…');
-    if(age>3000) beacon(true);            // Player zmlkl -> znovu init
+    const sx = Date.now()-lastSysex, any = Date.now()-lastRx;
+    if(sx < 4000)      setStatus('live', `připojeno · ${rxCount} zpráv`);
+    else if(any < 2000) setStatus('warn', 'přístroj žije, ale neodpovídá');
+    else                setStatus('off',  'ticho na lince');
+    if(sx > 4000) beacon(true);           // neodpovídá -> znovu init
   }, 700);
 }
 
@@ -226,6 +248,7 @@ function onMidi(e){
     if(d[1]!==MFG[0]||d[2]!==MFG[1]||d[3]!==MFG[2]) return;
     const fn=d[6], page=d[8], param=d[9];
     if(fn===FN.BEACON) return;                        // sense tick (~500 ms)
+    lastSysex = Date.now(); rxCount++;
 
     if(fn===FN.RESP_STRING && page===PAGE_STRINGS){
       const txt = String.fromCharCode(...d.slice(10,d.length-1)).replace(/[^\x20-\x7e]/g,'').trim();
@@ -242,9 +265,13 @@ function onMidi(e){
         if(param===P_STATE) s.on   = val>0;
         return render();
       }
-      if(page===TUNER.mode[0]&&param===TUNER.mode[1]){ state.tuner.on=val>0; return render(); }
-      if(page===TUNER.note[0]&&param===TUNER.note[1]){ state.tuner.note=val; return render(); }
-      if(page===TUNER.dev[0] &&param===TUNER.dev[1] ){ state.tuner.dev=val;  return render(); }
+      if(page===TUNER.mode[0]&&param===TUNER.mode[1]){
+        if(!(val>0)) tunerMuted = 0;          // ladička vypnuta -> reset ztišení
+        state.tuner.on = val>0; return render(); }
+      if(page===TUNER.note[0]&&param===TUNER.note[1]){
+        state.tuner.note=val; lastTuner=Date.now(); return render(); }
+      if(page===TUNER.dev[0] &&param===TUNER.dev[1] ){
+        state.tuner.dev=val;  lastTuner=Date.now(); return render(); }
     }
     return;
   }
@@ -271,8 +298,14 @@ function render(){
     box.querySelector('.tid').textContent  = st.type ? '#'+st.type : '';
   });
 
-  const t=el('tuner'); t.classList.toggle('show', state.tuner.on);
-  if(state.tuner.on){
+  // Ladičku pustíme jen když Player hlásí tuner mode A ZÁROVEŇ tečou nota
+  // nebo odchylka. Bez té druhé podmínky přebije rig prázdným "C / 0 ct".
+  // A vždy se dá odklepnout - žádný překryv nesmí uživatele uvěznit.
+  const live = state.tuner.on
+            && (Date.now() - lastTuner < 1500)
+            && (Date.now() - tunerMuted > 20000);
+  const t=el('tuner'); t.classList.toggle('show', live);
+  if(live){
     el('tNote').textContent = NOTES[state.tuner.note%12] ?? '–';
     const c = Math.round((state.tuner.dev-8192)/8192*50);
     el('tCents').textContent = (c>0?'+':'')+c+' ct';
@@ -302,6 +335,10 @@ el('slots').addEventListener('click', e=>{
   el('nameInput').value = fxNames[st.type] || '';
   el('nameDlg').classList.add('show'); el('nameInput').focus();
 });
+el('tuner').addEventListener('click', ()=>{
+  tunerMuted = Date.now();                    // 20 s klid, pak se může vrátit
+  el('tuner').classList.remove('show');
+});
 el('nameCancel').onclick = ()=> el('nameDlg').classList.remove('show');
 el('nameSave').onclick = ()=>{
   const v = el('nameInput').value.trim();
@@ -322,6 +359,10 @@ syncFxJson();
 el('cfgBtn').onclick   = ()=> el('cfg').classList.add('show');
 el('cfgClose').onclick = ()=> el('cfg').classList.remove('show');
 el('monBtn').onclick   = ()=>{ const m=el('mon'); m.style.display = m.style.display==='none'?'block':'none'; };
+const tunLabel = ()=> el('tunBtn').textContent = TUNER_ON ? 'zapnutá' : 'vypnutá';
+el('tunBtn').onclick = ()=>{ TUNER_ON=!TUNER_ON; LS.set('tuner',TUNER_ON); tunLabel();
+                             if(output) start(); };
+tunLabel();
 el('prodSel').value = String(PRODUCT);
 el('prodSel').onchange = e=>{ PRODUCT=+e.target.value; LS.set('product',PRODUCT); if(output) start(); };
 
