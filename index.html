@@ -3,16 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#0b0d10">
+<meta name="theme-color" content="#0b0d10" id="themeColor">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<title>Kemper HUD</title>
+<title>Rig Viewer</title>
 <style>
+  /* Zelená je odvozená z palety Rig Manageru: jejich Colors.txt má výběr
+     rgb(100,135,113) a ikona stojí na #1B705B. Je to odstín 165°, takže
+     pro tmavý podklad je zesvětlený a pro světlý se bere ten původní tmavý. */
   :root{
     --bg:#0b0d10; --panel:#15191f; --panel2:#1c2128; --line:#2a313b;
-    --fg:#f2f5f8; --dim:#8b95a3; --on:#3ddc84; --off:#3a424e;
-    --accent:#ff8a3d; --flat:#4da3ff; --sharp:#ff5d5d;
+    --fg:#f2f5f8; --dim:#8b95a3; --off:#3a424e;
+    --accent:#3bcea9; --onAccent:#04211a;
+    --on:#3bcea9; --onBg:#122b25; --onBorder:#2c7a65;
+    --flat:#4da3ff; --sharp:#ff5d5d;
+    --overlay:rgba(8,10,13,.985); --scrim:rgba(6,8,11,.82); --lockBg:#123029;
+    --mono:#0f1216; --monoFg:#9fb0c3; --monoTx:#6f8bb0; --monoRx:#8fd3a8;
+    /* Barvy bank podle Playeru; cyklí se po pěti. LED svítí syté
+       (0,0,255 / 255,255,0 / …), na displeji by to bylo nečitelné, proto
+       jsou přeladěné na stejný odstín s použitelným jasem. */
+    --bank1:#5b8cff; --bank2:#e3c341; --bank3:#ff5d5d;
+    --bank4:#5be07a; --bank5:#d96bc6;
+    color-scheme:dark;
+  }
+  /* světlá varianta: platí podle systému, pokud si uživatel nevynutil tmavou */
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#eef1f4; --panel:#ffffff; --panel2:#f3f5f8; --line:#d3dae2;
+      --fg:#111820; --dim:#5d6773; --off:#c3cbd4;
+      --accent:#1b705b; --onAccent:#ffffff;
+      --on:#1b705b; --onBg:#dff0ea; --onBorder:#1b705b;
+      --flat:#1f6fd0; --sharp:#c62828;
+      --overlay:rgba(238,241,244,.985); --scrim:rgba(40,48,58,.38); --lockBg:#d8ece5;
+      --mono:#f7f9fb; --monoFg:#44505e; --monoTx:#2f5d8f; --monoRx:#166b56;
+      --bank1:#1b46c8; --bank2:#8a6b00; --bank3:#c62828;
+      --bank4:#1f7a3a; --bank5:#9a1e7a;
+      color-scheme:light;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#eef1f4; --panel:#ffffff; --panel2:#f3f5f8; --line:#d3dae2;
+    --fg:#111820; --dim:#5d6773; --off:#c3cbd4;
+    --accent:#1b705b; --onAccent:#ffffff;
+    --on:#1b705b; --onBg:#dff0ea; --onBorder:#1b705b;
+    --flat:#1f6fd0; --sharp:#c62828;
+    --overlay:rgba(238,241,244,.985); --scrim:rgba(40,48,58,.38); --lockBg:#d8ece5;
+    --mono:#f7f9fb; --monoFg:#44505e; --monoTx:#2f5d8f; --monoRx:#166b56;
+    --bank1:#1b46c8; --bank2:#8a6b00; --bank3:#c62828;
+    --bank4:#1f7a3a; --bank5:#9a1e7a;
+    color-scheme:light;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
@@ -38,21 +78,35 @@
   .pill{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
     border-radius:999px;padding:7px 13px;font-size:12px;font-weight:600;
     letter-spacing:.04em;line-height:1;white-space:nowrap}
-  .pill.act{background:var(--accent);border-color:var(--accent);color:#1a1206}
-  .pill.lock{background:#3a2a14;border-color:var(--accent);color:var(--accent)}
+  .pill.act{background:var(--accent);border-color:var(--accent);color:var(--onAccent)}
+  .pill.lock{background:var(--lockBg);border-color:var(--accent);color:var(--accent)}
 
   main{flex:1;display:flex;flex-direction:column;min-height:0;padding:12px;gap:12px}
 
   /* ---- aktualni rig ---- */
   .rig{background:var(--panel);border:1px solid var(--line);border-radius:16px;
-    padding:14px 20px;display:flex;align-items:center;gap:18px;flex:0 0 auto}
+    padding:14px 20px;display:flex;align-items:center;gap:18px;flex:0 0 auto;
+    position:relative;overflow:hidden}
+  /* svislý pruh v barvě banky - na pódiu je to vidět i koutkem oka */
+  .rig::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;
+    background:var(--bank,transparent);transition:background .15s}
   .rig .id{font-variant-numeric:tabular-nums;font-size:clamp(26px,6vw,58px);font-weight:700;
-    color:var(--accent);line-height:1;min-width:3ch;text-align:center}
+    color:var(--bank,var(--accent));line-height:1;min-width:3ch;text-align:center}
   .rig .name{font-size:clamp(24px,6vw,64px);font-weight:650;letter-spacing:-.015em;line-height:1.05;
     flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rig .meta{font-size:11px;color:var(--dim);text-align:right;white-space:nowrap}
 
   /* ---- slot dlazdice ---- */
+  /* pruh s obsahem banky - pět rigů vedle sebe, aktuální zvýrazněný */
+  .banklist{display:flex;gap:7px;flex:0 0 auto}
+  .banklist div{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:7px 9px;font-size:12px;color:var(--dim);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .banklist div b{font-variant-numeric:tabular-nums;margin-right:6px;opacity:.65}
+  .banklist div.cur{color:var(--fg);border-color:var(--bank,var(--accent));
+    background:var(--panel2)}
+  .banklist div.cur b{color:var(--bank,var(--accent));opacity:1}
+
   .slots{flex:1;display:grid;gap:9px;min-height:0;
     grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)}
   @media (max-width:700px){.slots{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(4,1fr)}}
@@ -64,7 +118,7 @@
     overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .slot .tid{font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums;opacity:.7}
   .slot.empty{opacity:.3}
-  .slot.on{background:linear-gradient(180deg,#1d2a22,#15191f);border-color:#2f6b48}
+  .slot.on{background:linear-gradient(180deg,var(--onBg),var(--panel));border-color:var(--onBorder)}
   .slot.on .lbl{color:var(--on)}
   .slot.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--on)}
   .slot:active{transform:scale(.97);filter:brightness(1.25)}
@@ -74,7 +128,7 @@
 
 
   /* ---- ladicka ---- */
-  .tuner{position:fixed;inset:0;background:rgba(8,10,13,.985);z-index:30;
+  .tuner{position:fixed;inset:0;background:var(--overlay);z-index:30;
     display:none;flex-direction:column;align-items:center;justify-content:center;gap:24px}
   .tuner.show{display:flex}
   .tuner .note{font-size:clamp(90px,25vh,260px);font-weight:700;line-height:.9;font-variant-numeric:tabular-nums}
@@ -88,7 +142,7 @@
     color:var(--dim);font-size:13px}
 
   /* ---- prekryvy ---- */
-  .sheet{position:fixed;inset:0;background:rgba(6,8,11,.82);z-index:40;display:none;
+  .sheet{position:fixed;inset:0;background:var(--scrim);z-index:40;display:none;
     align-items:flex-start;justify-content:center;padding:20px;overflow:auto}
   .sheet.show{display:flex}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;
@@ -99,12 +153,12 @@
   select,input,textarea,.btn{background:var(--panel2);color:var(--fg);border:1px solid var(--line);
     border-radius:10px;padding:9px 12px;font-size:14px;flex:1;min-width:0}
   .btn{flex:0 0 auto;text-align:center}
-  .btn:active{background:#2a313b}
-  .btn.pri{background:var(--accent);border-color:var(--accent);color:#1a1206;font-weight:600}
+  .btn:active{background:var(--line)}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--onAccent);font-weight:600}
   textarea{font:11px/1.5 ui-monospace,Menlo,monospace;min-height:110px;resize:vertical}
-  .mon{background:#0f1216;border:1px solid var(--line);border-radius:10px;padding:9px;max-height:30vh;
-    overflow:auto;font:10px/1.45 ui-monospace,Menlo,monospace;color:#9fb0c3;white-space:pre-wrap;word-break:break-all}
-  .mon .tx{color:#6f8bb0} .mon .rx{color:#8fd3a8}
+  .mon{background:var(--mono);border:1px solid var(--line);border-radius:10px;padding:9px;max-height:30vh;
+    overflow:auto;font:10px/1.45 ui-monospace,Menlo,monospace;color:var(--monoFg);white-space:pre-wrap;word-break:break-all}
+  .mon .tx{color:var(--monoTx)} .mon .rx{color:var(--monoRx)}
   .note-sm{font-size:12px;color:var(--dim);line-height:1.5}
 </style>
 </head>
@@ -112,20 +166,21 @@
 
 <header>
   <span class="dot" id="dot"></span>
-  <span id="status">odpojeno</span>
+  <span id="status" data-i18n="st.disconnected">odpojeno</span>
   <span class="sp"></span>
   <button class="pill" id="editBtn">názvy</button>
   <button class="pill" id="lockBtn">odemčeno</button>
-  <button class="ico" id="fsBtn" title="Celá obrazovka">⛶</button>
-  <button class="ico" id="cfgBtn" title="Nastavení">⚙</button>
+  <button class="ico" id="fsBtn" data-i18n-title="title.fullscreen">⛶</button>
+  <button class="ico" id="cfgBtn" data-i18n-title="title.settings">⚙</button>
 </header>
 
 <main>
   <div class="rig">
     <div class="id" id="rigId">–</div>
-    <div class="name" id="rigName">Kemper HUD</div>
+    <div class="name" id="rigName">Rig Viewer</div>
     <div class="meta" id="rigMeta"></div>
   </div>
+  <div class="banklist" id="banklist" hidden></div>
   <div class="slots" id="slots"></div>
 </main>
 
@@ -134,18 +189,38 @@
   <div class="note" id="tNote">–</div>
   <div class="bar"><div class="center"></div><div class="needle" id="tNeedle"></div></div>
   <div class="cents" id="tCents"></div>
-  <div class="esc">klepnutím zavřeš</div>
+  <div class="esc" data-i18n="tuner.close"></div>
 </div>
 
 <!-- nastaveni -->
 <div class="sheet" id="cfg">
   <div class="card">
-    <div class="row"><h2>Nastavení</h2><span class="sp" style="flex:1"></span>
-      <button class="btn" id="cfgClose">Zavřít</button></div>
+    <div class="row"><h2 data-i18n="set.title"></h2><span class="sp" style="flex:1"></span>
+      <button class="btn" id="cfgClose" data-i18n="set.close"></button></div>
 
-    <div class="row"><label>MIDI vstup</label><select id="inSel"></select></div>
-    <div class="row"><label>MIDI výstup</label><select id="outSel"></select></div>
-    <div class="row"><label>Zařízení</label>
+    <div class="row"><label data-i18n="set.theme"></label>
+      <select id="themeSel">
+        <option value="system" data-i18n="set.themeSystem"></option>
+        <option value="light"  data-i18n="set.themeLight"></option>
+        <option value="dark"   data-i18n="set.themeDark"></option>
+      </select></div>
+
+    <div class="row"><label data-i18n="set.language"></label>
+      <select id="langSel">
+        <option value="cs">Čeština</option>
+        <option value="en">English</option>
+        <option value="de">Deutsch</option>
+      </select></div>
+
+    <div id="portRow">
+      <div class="row"><label data-i18n="set.midiIn"></label><select id="inSel"></select></div>
+      <div class="row"><label data-i18n="set.midiOut"></label><select id="outSel"></select></div>
+    </div>
+    <div class="row" id="devRow" hidden><label data-i18n="set.device"></label>
+      <span class="note-sm" style="flex:1" id="devName">–</span>
+      <button class="btn" id="rescanBtn" data-i18n="set.rescan"></button></div>
+    <div class="mon" id="ports" hidden></div>
+    <div class="row"><label data-i18n="set.deviceType"></label>
       <select id="prodSel">
         <option value="2">Profiler Player</option>
         <option value="0">Profiler (Stage/Head/Rack)</option>
@@ -153,28 +228,28 @@
 
     <div class="note-sm" id="wlNote"></div>
 
-    <div class="row"><label>Názvy efektů</label>
-      <button class="btn" id="fxClear">Smazat vše</button>
-      <button class="btn" id="fxCopy">Kopírovat</button></div>
+    <div class="row"><label data-i18n="set.fxNames"></label>
+      <button class="btn" id="fxClear" data-i18n="set.clearAll"></button>
+      <button class="btn" id="fxCopy" data-i18n="set.copy"></button></div>
     <textarea id="fxJson" spellcheck="false" placeholder='{"33":"Green Scream","113":"Hall Reverb"}'></textarea>
-    <div class="note-sm">Klepnutím na dlaždici pojmenuješ efekt, který je právě v daném slotu.
-      Kemper posílá jen číselné ID typu – tabulku si takhle postupně vyklikáš. JSON můžeš zálohovat.</div>
+    <div class="note-sm" data-i18n="set.fxHint"></div>
 
-    <div class="row"><label>Ladička</label>
+    <div class="row"><label data-i18n="set.banklist"></label>
+      <button class="btn" id="blBtn">–</button>
+      <span class="note-sm" style="flex:1" data-i18n="set.banklistHint"></span></div>
+
+    <div class="row"><label data-i18n="set.tuner"></label>
       <button class="btn" id="tunBtn">–</button>
-      <span class="note-sm" style="flex:1">Default vypnutá — celoobrazovkový překryv
-        se pak neobjeví, ať Player posílá cokoliv. Zapnutím si řekneš i o data
-        ladičky (bit 5 v beaconu).</span></div>
+      <span class="note-sm" style="flex:1" data-i18n="set.tunerHint"></span></div>
 
-    <div class="row"><label>MIDI kanál</label>
+    <div class="row"><label data-i18n="set.channel"></label>
       <select id="chSel"></select>
-      <span class="note-sm" style="flex:1">Na kterém kanálu Player poslouchá.
-        Když ovládání nereaguje, je to první, co zkusit.</span></div>
+      <span class="note-sm" style="flex:1" data-i18n="set.channelHint"></span></div>
 
-    <div class="row"><label>Provoz</label>
+    <div class="row"><label data-i18n="set.traffic"></label>
       <span class="note-sm" style="flex:1" id="stats">–</span></div>
 
-    <div class="row"><label>MIDI log</label><button class="btn" id="monBtn">zap/vyp</button></div>
+    <div class="row"><label data-i18n="set.midiLog"></label><button class="btn" id="monBtn" data-i18n="set.onOff"></button></div>
     <div class="mon" id="mon" style="display:none"></div>
   </div>
 </div>
@@ -182,11 +257,11 @@
 <!-- pojmenovani efektu -->
 <div class="sheet" id="nameDlg">
   <div class="card">
-    <h2 id="nameTitle">Pojmenovat efekt</h2>
-    <input id="nameInput" placeholder="např. Green Scream" spellcheck="false">
+    <h2 id="nameTitle" data-i18n="dlg.nameEffect"></h2>
+    <input id="nameInput" data-i18n-ph="dlg.placeholder" spellcheck="false">
     <div class="row"><span style="flex:1"></span>
-      <button class="btn" id="nameCancel">Zrušit</button>
-      <button class="btn pri" id="nameSave">Uložit</button></div>
+      <button class="btn" id="nameCancel" data-i18n="dlg.cancel"></button>
+      <button class="btn pri" id="nameSave" data-i18n="dlg.save"></button></div>
   </div>
 </div>
 
@@ -196,7 +271,11 @@
    F0 00 20 33 <product> <device> <func> <instance> <page> <param> [data] F7
    ========================================================================== */
 const MFG = [0x00,0x20,0x33], DEVICE = 0x7f, INSTANCE = 0x00;
-const FN  = { SET:0x01, REQ_PARAM:0x41, REQ_STRING:0x43, RESP_PARAM:0x01, RESP_STRING:0x03, BEACON:0x7e };
+const FN  = { SET:0x01, REQ_PARAM:0x41, REQ_STRING:0x43, RESP_PARAM:0x01, RESP_STRING:0x03,
+              BEACON:0x7e,
+              // Tyhle dvě v dokumentaci nejsou, vypadly až z odposlechu:
+              RESP_PARAM_NAMED:0x3c,  // parametr i s jeho jménem
+              RESP_EXT_STRING:0x07 }; // rozšířený řetězec (obsah banky)
 
 const PARAM_SET = 0x02;   // sada: rig name + slot type/state + tuner
 const LEASE_SEC = 10;     // beacon lease; preposilat po polovine
@@ -204,6 +283,7 @@ const POLL_MS   = 15000;  // Záloha, ne hlavní kanál. Beacon posílá změny 
                           // tohle jen podchytí přepnutí rigu přímo na přístroji,
                           // které neposílá Program Change. Při 3 s to dělalo
                           // 6 odpovědí/s, což je zbytečný provoz.
+let BANKLIST = LS_BOOT('banklist', true);   // pruh s obsahem banky
 let TUNER_ON = LS_BOOT('tuner', false);   // bit 5 beaconu = posílej data ladičky.
    // Default vypnuto: Player pak hlásil tuner mode = on a celoobrazovková
    // ladička překryla rig, přičemž nota ani odchylka nikdy nepřišly.
@@ -231,16 +311,174 @@ const LS = {
 let PRODUCT = LS.get('product', 2);
 let CHANNEL = LS.get('channel', 1);      // MIDI kanál, na kterém Player poslouchá
 let LOCKED  = LS.get('locked', false);   // zámek proti nechtěnému šlápnutí
-let fxNames = LS.get('fx', {});
-const state = { rigName:'', rigDate:'', pc:null, bankMsb:null, slots:{}, tuner:{on:false,note:0,dev:8192} };
-let midi=null, input=null, output=null, beaconT=null, pollT=null, wdT=null, wakeLock=null;
+let fxNames = LS.get('fx', {});      // ruční, mají přednost
+let fxAuto  = LS.get('fxauto', {});  // co poslal Kemper sám
+const state = { rigName:'', rigDate:'', pc:null, bankMsb:null, slots:{},
+                tuner:{on:false,note:0,dev:8192},
+                bank:{ name:'', rigs:[] } };
+let beaconT=null, pollT=null, wdT=null, wakeLock=null;
 let lastRx=0;        // cokoliv z přístroje (i Active Sensing)
 let lastSysex=0;     // skutečná SysEx odpověď od Kemperu
 let lastTuner=0;     // poslední nota / odchylka z ladičky
 let tunerMuted=0;    // kdy uživatel ladičku odklepl
+let wakeState=null;  // 'on' | 'off' | null
 let rxCount=0, rateCount=0, rxRate=0;
 const traffic = {};                  // co vlastně chodí, podle adresy
 const bump = k => traffic[k] = (traffic[k]||0)+1;
+function trafficLabel(k){
+  const [kind, arg] = k.split(':');
+  switch(kind){
+    case 'rigName':   return t('tr.rigName');
+    case 'rigDate':   return t('tr.rigDate');
+    case 'string':    return t('tr.string', arg);
+    case 'slotType':  return t('tr.slotType', arg);
+    case 'slotState': return t('tr.slotState', arg);
+    case 'tunerMode': return t('tr.tunerMode');
+    case 'tunerNote': return t('tr.tunerNote');
+    case 'tunerDev':  return t('tr.tunerDev');
+    case 'bankList':  return t('tr.bankList');
+    case 'unknown':   return t('tr.unknown', arg);
+    default:          return k;
+  }
+}
+
+
+/* ============================== jazyky ==================================
+   Klíče jsou stabilní, texty se mění. Fallback: neznámý jazyk -> angličtina,
+   chybějící klíč -> anglický text, a teprve pak samotný klíč.
+   ====================================================================== */
+const I18N = {
+cs:{
+ 'st.disconnected':'odpojeno','st.connected':'připojeno',
+ 'st.aliveNoAnswer':'přístroj žije, ale neodpovídá','st.silent':'ticho na lince',
+ 'st.pickPorts':'vyber MIDI vstup i výstup','st.connectUsb':'připoj Player přes USB',
+ 'st.searching':'hledám Player…','st.noWebMidi':'Web MIDI nedostupné','st.noMidi':'MIDI nedostupné',
+ 'msg.iosApp':'na iOS otevři nativní aplikaci','dev.notConnected':'Player nepřipojen',
+ 'btn.names':'názvy','btn.namesOn':'názvy: zapnuto','btn.unlocked':'odemčeno','btn.locked':'zamčeno',
+ 'title.fullscreen':'Celá obrazovka','title.settings':'Nastavení',
+ 'tuner.close':'klepnutím zavřeš',
+ 'set.title':'Nastavení','set.close':'Zavřít','set.language':'Jazyk',
+ 'set.theme':'Motiv','set.themeSystem':'podle systému','set.themeLight':'světlý','set.themeDark':'tmavý',
+ 'set.midiIn':'MIDI vstup','set.midiOut':'MIDI výstup','set.choose':'— vyber —',
+ 'set.device':'Zařízení','set.deviceType':'Typ přístroje',
+ 'set.rescan':'hledat znovu','set.noPorts':'systém nevidí žádné MIDI zařízení',
+ 'set.fxNames':'Názvy efektů','set.clearAll':'Smazat vše','set.copy':'Kopírovat',
+ 'set.fxHint':'Zapni režim „názvy“ v liště a klepnutím na dlaždici pojmenuješ efekt, který je právě v daném slotu. Kemper posílá jen číselné ID typu – tabulku si takhle postupně vyklikáš. JSON můžeš zálohovat.',
+ 'set.tuner':'Ladička',
+ 'set.banklist':'Obsah banky','set.banklistHint':'Pruh s pěti rigy v bance. Kemper je posílá sám, není co nastavovat.','tr.bankList':'obsah banky','set.tunerOn':'zapnutá','set.tunerOff':'vypnutá',
+ 'set.tunerHint':'Default vypnutá — celoobrazovkový překryv se pak neobjeví, ať Player posílá cokoliv. Zapnutím si řekneš i o data ladičky (bit 5 v beaconu).',
+ 'set.channel':'MIDI kanál',
+ 'set.channelHint':'Na kterém kanálu Player poslouchá. Když ovládání nereaguje, je to první, co zkusit.',
+ 'set.traffic':'Provoz','set.midiLog':'MIDI log','set.onOff':'zap/vyp',
+ 'dlg.nameEffect':'Pojmenovat efekt','dlg.cancel':'Zrušit','dlg.save':'Uložit',
+ 'dlg.placeholder':'např. Green Scream','dlg.title':'Slot {0} · typ #{1}',
+ 'fx.type':'typ {0}','err.json':'Neplatný JSON','ask.clearFx':'Smazat všechny názvy efektů?',
+ 'stats.line':'{0} zpráv/s · celkem {1}','stats.none':'nic nepřišlo',
+ 'wake.on':'Displej je držený rozsvícený (Wake Lock aktivní).',
+ 'wake.off':'Wake Lock nedostupný – vypni uspávání displeje ručně.',
+ 'tr.rigName':'název rigu','tr.rigDate':'datum rigu','tr.string':'string {0}',
+ 'tr.slotType':'slot {0} typ','tr.slotState':'slot {0} stav',
+ 'tr.tunerMode':'ladička: režim','tr.tunerNote':'ladička: nota','tr.tunerDev':'ladička: odchylka',
+ 'tr.unknown':'neznámé {0}'
+},
+en:{
+ 'st.disconnected':'disconnected','st.connected':'connected',
+ 'st.aliveNoAnswer':'device alive, but not answering','st.silent':'no data',
+ 'st.pickPorts':'select MIDI input and output','st.connectUsb':'connect the Player via USB',
+ 'st.searching':'looking for the Player…','st.noWebMidi':'Web MIDI unavailable','st.noMidi':'MIDI unavailable',
+ 'msg.iosApp':'on iOS use the native app','dev.notConnected':'Player not connected',
+ 'btn.names':'names','btn.namesOn':'names: on','btn.unlocked':'unlocked','btn.locked':'locked',
+ 'title.fullscreen':'Fullscreen','title.settings':'Settings',
+ 'tuner.close':'tap to close',
+ 'set.title':'Settings','set.close':'Close','set.language':'Language',
+ 'set.theme':'Theme','set.themeSystem':'system','set.themeLight':'light','set.themeDark':'dark',
+ 'set.midiIn':'MIDI input','set.midiOut':'MIDI output','set.choose':'— choose —',
+ 'set.device':'Device','set.deviceType':'Device type',
+ 'set.rescan':'rescan','set.noPorts':'the system sees no MIDI device',
+ 'set.fxNames':'Effect names','set.clearAll':'Clear all','set.copy':'Copy',
+ 'set.fxHint':'Turn on “names” in the top bar, then tap a tile to name the effect currently in that slot. The Kemper only sends a numeric type ID – this is how you build the table. The JSON can be backed up.',
+ 'set.tuner':'Tuner',
+ 'set.banklist':'Bank contents','set.banklistHint':'Strip with the five rigs in the bank. The Kemper sends them on its own.','tr.bankList':'bank contents','set.tunerOn':'on','set.tunerOff':'off',
+ 'set.tunerHint':'Off by default — the fullscreen overlay then never appears, whatever the Player sends. Turning it on also requests tuner data (bit 5 of the beacon).',
+ 'set.channel':'MIDI channel',
+ 'set.channelHint':'The channel the Player listens on. If control does not respond, check this first.',
+ 'set.traffic':'Traffic','set.midiLog':'MIDI log','set.onOff':'on/off',
+ 'dlg.nameEffect':'Name effect','dlg.cancel':'Cancel','dlg.save':'Save',
+ 'dlg.placeholder':'e.g. Green Scream','dlg.title':'Slot {0} · type #{1}',
+ 'fx.type':'type {0}','err.json':'Invalid JSON','ask.clearFx':'Delete all effect names?',
+ 'stats.line':'{0} msg/s · total {1}','stats.none':'nothing received',
+ 'wake.on':'Screen is kept awake (Wake Lock active).',
+ 'wake.off':'Wake Lock unavailable – turn off screen timeout manually.',
+ 'tr.rigName':'rig name','tr.rigDate':'rig date','tr.string':'string {0}',
+ 'tr.slotType':'slot {0} type','tr.slotState':'slot {0} state',
+ 'tr.tunerMode':'tuner: mode','tr.tunerNote':'tuner: note','tr.tunerDev':'tuner: deviation',
+ 'tr.unknown':'unknown {0}'
+},
+de:{
+ 'st.disconnected':'getrennt','st.connected':'verbunden',
+ 'st.aliveNoAnswer':'Gerät lebt, antwortet aber nicht','st.silent':'keine Daten',
+ 'st.pickPorts':'MIDI-Ein- und Ausgang wählen','st.connectUsb':'Player per USB anschließen',
+ 'st.searching':'suche Player…','st.noWebMidi':'Web MIDI nicht verfügbar','st.noMidi':'MIDI nicht verfügbar',
+ 'msg.iosApp':'unter iOS die native App nutzen','dev.notConnected':'Player nicht verbunden',
+ 'btn.names':'Namen','btn.namesOn':'Namen: an','btn.unlocked':'entsperrt','btn.locked':'gesperrt',
+ 'title.fullscreen':'Vollbild','title.settings':'Einstellungen',
+ 'tuner.close':'zum Schließen tippen',
+ 'set.title':'Einstellungen','set.close':'Schließen','set.language':'Sprache',
+ 'set.theme':'Design','set.themeSystem':'System','set.themeLight':'hell','set.themeDark':'dunkel',
+ 'set.midiIn':'MIDI-Eingang','set.midiOut':'MIDI-Ausgang','set.choose':'— wählen —',
+ 'set.device':'Gerät','set.deviceType':'Gerätetyp',
+ 'set.rescan':'neu suchen','set.noPorts':'System sieht kein MIDI-Gerät',
+ 'set.fxNames':'Effektnamen','set.clearAll':'Alle löschen','set.copy':'Kopieren',
+ 'set.fxHint':'Schalte oben „Namen“ ein und tippe auf eine Kachel, um den Effekt im jeweiligen Slot zu benennen. Der Kemper sendet nur eine numerische Typ-ID – so baust du die Tabelle nach und nach auf. Das JSON lässt sich sichern.',
+ 'set.tuner':'Stimmgerät',
+ 'set.banklist':'Bank-Inhalt','set.banklistHint':'Leiste mit den fünf Rigs der Bank. Der Kemper sendet sie von selbst.','tr.bankList':'Bank-Inhalt','set.tunerOn':'an','set.tunerOff':'aus',
+ 'set.tunerHint':'Standardmäßig aus — die Vollbild-Überlagerung erscheint dann nie, egal was der Player sendet. Beim Einschalten werden auch Stimmgerätdaten angefordert (Bit 5 im Beacon).',
+ 'set.channel':'MIDI-Kanal',
+ 'set.channelHint':'Der Kanal, auf dem der Player hört. Wenn die Steuerung nicht reagiert, zuerst hier nachsehen.',
+ 'set.traffic':'Datenverkehr','set.midiLog':'MIDI-Log','set.onOff':'an/aus',
+ 'dlg.nameEffect':'Effekt benennen','dlg.cancel':'Abbrechen','dlg.save':'Speichern',
+ 'dlg.placeholder':'z. B. Green Scream','dlg.title':'Slot {0} · Typ #{1}',
+ 'fx.type':'Typ {0}','err.json':'Ungültiges JSON','ask.clearFx':'Alle Effektnamen löschen?',
+ 'stats.line':'{0} Nachr./s · gesamt {1}','stats.none':'nichts empfangen',
+ 'wake.on':'Display wird wachgehalten (Wake Lock aktiv).',
+ 'wake.off':'Wake Lock nicht verfügbar – Display-Timeout manuell abschalten.',
+ 'tr.rigName':'Rig-Name','tr.rigDate':'Rig-Datum','tr.string':'String {0}',
+ 'tr.slotType':'Slot {0} Typ','tr.slotState':'Slot {0} Status',
+ 'tr.tunerMode':'Stimmgerät: Modus','tr.tunerNote':'Stimmgerät: Note','tr.tunerDev':'Stimmgerät: Abweichung',
+ 'tr.unknown':'unbekannt {0}'
+}};
+
+let LANG = LS_BOOT('lang', null) || (navigator.language || 'en').slice(0,2).toLowerCase();
+if(!I18N[LANG]) LANG = 'en';
+
+function t(key, ...args){
+  let str = (I18N[LANG] && I18N[LANG][key]) || I18N.en[key] || key;
+  args.forEach((v,i)=> str = str.split('{'+i+'}').join(v));
+  return str;
+}
+
+let THEME = LS_BOOT('theme', 'system');   // 'system' | 'light' | 'dark'
+
+function applyTheme(){
+  const root = document.documentElement;
+  if(THEME === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', THEME);
+  // barvu lišty systému srovnáme s pozadím, ať nesvítí v druhém motivu
+  const bg = getComputedStyle(root).getPropertyValue('--bg').trim();
+  const meta = el('themeColor');
+  if(meta) meta.setAttribute('content', bg);
+}
+
+function applyLang(){
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i18n]').forEach(e=> e.textContent = t(e.dataset.i18n));
+  document.querySelectorAll('[data-i18n-title]').forEach(e=> e.title = t(e.dataset.i18nTitle));
+  document.querySelectorAll('[data-i18n-ph]').forEach(e=> e.placeholder = t(e.dataset.i18nPh));
+  el('themeSel').value = THEME;
+  lockLabel(); editLabel(); tunLabel(); blLabel(); stats(); render();
+  if(Transport.kind === 'web' && midiAccess) fillPorts();
+  keepAwakeNote();
+}
 
 /* ================================ MIDI ================================== */
 function log(dir, bytes){
@@ -251,7 +489,9 @@ function log(dir, bytes){
   while(m.childElementCount>150) m.lastElementChild.remove();
 }
 const sysex = (fn,tail)=>[0xf0,...MFG,PRODUCT,DEVICE,fn,INSTANCE,...tail,0xf7];
-function send(b){ if(!output) return; try{ output.send(b); log('tx',b); }catch(e){} }
+// Posílá se přes Transport, ne přímo do Web MIDI portu - na iOS Web MIDI
+// neexistuje a data chodí přes nativní most z WKWebView.
+function send(b){ if(!Transport.ready) return; try{ Transport.send(b); log('tx',b); }catch(e){} }
 const reqParam  = (page,param)=>send(sysex(FN.REQ_PARAM,[page,param]));
 const reqString = id=>send(sysex(FN.REQ_STRING,[PAGE_STRINGS,id]));
 const beacon    = (init=false)=>send(sysex(FN.BEACON,[0x40,PARAM_SET,FLAGS(init),LEASE_SEC/2|0]));
@@ -280,9 +520,9 @@ function start(){
   wdT     = setInterval(()=>{
     rxRate = rateCount / 0.7; rateCount = 0;       // zpráv za sekundu
     const sx = Date.now()-lastSysex, any = Date.now()-lastRx;
-    if(sx < 20000)      setStatus('live', 'připojeno');
-    else if(any < 2000) setStatus('warn', 'přístroj žije, ale neodpovídá');
-    else                setStatus('off',  'ticho na lince');
+    if(sx < 20000)      setStatus('live', t('st.connected'));
+    else if(any < 2000) setStatus('warn', t('st.aliveNoAnswer'));
+    else                setStatus('off',  t('st.silent'));
     if(sx > 20000) beacon(true);          // neodpovídá -> znovu init
     if(el('cfg').classList.contains('show')) stats();
   }, 700);
@@ -297,11 +537,39 @@ function onMidi(e){
     if(fn===FN.BEACON) return;                        // sense tick (~500 ms)
     lastSysex = Date.now(); rxCount++; rateCount++;
 
+    // Parametr i se jménem. Díky tomu se názvy efektů nemusí vyklikávat ručně.
+    if(fn===FN.RESP_PARAM_NAMED){
+      const val = (d[10]<<7) | d[11];
+      const nm  = String.fromCharCode(...d.slice(12, d.length-1))
+                    .replace(/[^\x20-\x7e]/g,'').trim();
+      const slot = SLOTS.find(x=>x.page===page);
+      if(slot && param===P_TYPE){
+        (state.slots[slot.key] ||= {type:0,on:false}).type = val;
+        if(nm && nm !== '-'){
+          if(fxAuto[val] !== nm){ fxAuto[val] = nm; LS.set('fxauto', fxAuto); }
+        }
+        bump('slotType:'+slot.key);
+        return render();
+      }
+      return;
+    }
+
+    // Obsah celé banky: index 0 je název banky, 1 až 5 jsou rigy.
+    if(fn===FN.RESP_EXT_STRING && d[8]===0x00 && d[9]===0x00 && d[10]===0x01){
+      const idx = d[12];
+      const txt = String.fromCharCode(...d.slice(13, d.length-1))
+                    .replace(/[^\x20-\x7e]/g,'').trim();
+      if(idx === 0) state.bank.name = txt;
+      else state.bank.rigs[idx-1] = txt;
+      bump('bankList');
+      return render();
+    }
+
     if(fn===FN.RESP_STRING && page===PAGE_STRINGS){
       const txt = String.fromCharCode(...d.slice(10,d.length-1)).replace(/[^\x20-\x7e]/g,'').trim();
-      if(param===S_RIG_NAME){ state.rigName=txt; bump('název rigu'); }
-      else if(param===S_RIG_DATE){ state.rigDate=txt; bump('datum rigu'); }
-      else bump(`string ${param.toString(16)}`);
+      if(param===S_RIG_NAME){ state.rigName=txt; bump('rigName'); }
+      else if(param===S_RIG_DATE){ state.rigDate=txt; bump('rigDate'); }
+      else bump('string:'+param.toString(16));
       return render();
     }
     if(fn===FN.RESP_PARAM){
@@ -309,21 +577,21 @@ function onMidi(e){
       const slot = SLOTS.find(s=>s.page===page);
       if(slot){
         const s = state.slots[slot.key] ||= {type:0,on:false};
-        if(param===P_TYPE)  { s.type = val; bump(`slot ${slot.key} typ`); }
-        if(param===P_STATE) { s.on = val>0; bump(`slot ${slot.key} stav`); }
+        if(param===P_TYPE)  { s.type = val; bump('slotType:'+slot.key); }
+        if(param===P_STATE) { s.on = val>0; bump('slotState:'+slot.key); }
         return render();
       }
       if(page===TUNER.mode[0]&&param===TUNER.mode[1]){
-        bump('ladička: režim');
+        bump('tunerMode');
         if(!(val>0)) tunerMuted = 0;          // ladička vypnuta -> reset ztišení
         state.tuner.on = val>0; return render(); }
       if(page===TUNER.note[0]&&param===TUNER.note[1]){
-        bump('ladička: nota');
+        bump('tunerNote');
         state.tuner.note=val; lastTuner=Date.now(); return render(); }
       if(page===TUNER.dev[0] &&param===TUNER.dev[1] ){
-        bump('ladička: odchylka');
+        bump('tunerDev');
         state.tuner.dev=val;  lastTuner=Date.now(); return render(); }
-      bump(`neznámé ${page.toString(16)}/${param.toString(16)}`);
+      bump('unknown:'+page.toString(16)+'/'+param.toString(16));
     }
     return;
   }
@@ -334,14 +602,32 @@ function onMidi(e){
 
 /* =============================== render ================================= */
 const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const fxLabel = t => t===0 ? '—' : (fxNames[t] || 'typ '+t);
+const fxLabel = id => id===0 ? '—' : (fxNames[id] || fxAuto[id] || t('fx.type', id));
 
 function render(){
   el('rigName').textContent = state.rigName || '—';
   el('rigMeta').textContent = state.rigDate || '';
-  if(state.pc==null) el('rigId').textContent='–';
-  else { const i=(state.bankMsb||0)*128+state.pc;
-         el('rigId').textContent = `${Math.floor(i/5)+1}-${i%5+1}`; }
+  const rigRow = document.querySelector('.rig');
+  if(state.pc==null){
+    el('rigId').textContent = '–';
+    rigRow.style.removeProperty('--bank');
+  } else {
+    const i = (state.bankMsb||0)*128 + state.pc;
+    const bank = Math.floor(i/5);
+    el('rigId').textContent = `${bank+1}-${i%5+1}`;
+    // Player cyklí pět barev: modrá, žlutá, červená, světle zelená, purpurová
+    rigRow.style.setProperty('--bank', `var(--bank${bank % 5 + 1})`);
+  }
+
+  // pruh s obsahem banky
+  const bl = el('banklist');
+  const rigInBank = state.pc==null ? -1 : ((state.bankMsb||0)*128 + state.pc) % 5;
+  if(BANKLIST && state.bank.rigs.length){
+    bl.hidden = false;
+    bl.style.setProperty('--bank', rigRow.style.getPropertyValue('--bank') || '');
+    bl.innerHTML = state.bank.rigs.map((n,i)=>
+      `<div class="${i===rigInBank?'cur':''}"><b>${i+1}</b>${n||'—'}</div>`).join('');
+  } else bl.hidden = true;
 
   SLOTS.forEach(s=>{
     const box=el('slot-'+s.key), st=state.slots[s.key]||{type:0,on:false};
@@ -389,7 +675,7 @@ let editType = null, EDIT = false;      // EDIT se schválně neukládá
 function openNameDlg(key){
   const st = state.slots[key]; if(!st || !st.type) return;
   editType = st.type;
-  el('nameTitle').textContent = `Slot ${key} · typ #${st.type}`;
+  el('nameTitle').textContent = t('dlg.title', key, st.type);
   el('nameInput').value = fxNames[st.type] || '';
   el('nameDlg').classList.add('show'); el('nameInput').focus();
 }
@@ -402,7 +688,7 @@ el('slots').addEventListener('click', e=>{
 });
 
 function editLabel(){
-  el('editBtn').textContent = EDIT ? 'názvy: zapnuto' : 'názvy';
+  el('editBtn').textContent = t(EDIT ? 'btn.namesOn' : 'btn.names');
   el('editBtn').className = 'pill' + (EDIT ? ' act' : '');
   el('slots').classList.toggle('edit', EDIT);
 }
@@ -419,22 +705,25 @@ el('nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') el('nameSav
 const syncFxJson = ()=> el('fxJson').value = JSON.stringify(fxNames,null,1);
 el('fxJson').addEventListener('change', ()=>{
   try{ fxNames = JSON.parse(el('fxJson').value||'{}'); LS.set('fx',fxNames); render(); }
-  catch(e){ alert('Neplatný JSON'); }
+  catch(e){ alert(t('err.json')); }
 });
-el('fxClear').onclick = ()=>{ if(confirm('Smazat všechny názvy efektů?')){ fxNames={}; LS.set('fx',fxNames); syncFxJson(); render(); } };
+el('fxClear').onclick = ()=>{ if(confirm(t('ask.clearFx'))){ fxNames={}; LS.set('fx',fxNames); syncFxJson(); render(); } };
 el('fxCopy').onclick  = ()=> navigator.clipboard?.writeText(el('fxJson').value);
 syncFxJson();
 
 function stats(){
   const rows = Object.entries(traffic).sort((a,b)=>b[1]-a[1]).slice(0,8);
   el('stats').innerHTML =
-    `${rxRate.toFixed(1)} zpráv/s · celkem ${rxCount}<br>` +
-    (rows.length ? rows.map(([k,v])=>`${k}: ${v}`).join(' · ') : 'nic nepřišlo');
+    `${t('stats.line', rxRate.toFixed(1), rxCount)}<br>` +
+    (rows.length ? rows.map(([k,v])=>`${trafficLabel(k)}: ${v}`).join(' · ')
+                 : t('stats.none'));
 }
 el('cfgBtn').onclick   = ()=>{ stats(); el('cfg').classList.add('show'); };
 el('cfgClose').onclick = ()=> el('cfg').classList.remove('show');
 el('monBtn').onclick   = ()=>{ const m=el('mon'); m.style.display = m.style.display==='none'?'block':'none'; };
-const tunLabel = ()=> el('tunBtn').textContent = TUNER_ON ? 'zapnutá' : 'vypnutá';
+const blLabel = ()=> el('blBtn').textContent = t(BANKLIST ? 'set.tunerOn' : 'set.tunerOff');
+el('blBtn').onclick = ()=>{ BANKLIST=!BANKLIST; LS.set('banklist',BANKLIST); blLabel(); render(); };
+const tunLabel = ()=> el('tunBtn').textContent = t(TUNER_ON ? 'set.tunerOn' : 'set.tunerOff');
 el('tunBtn').onclick = ()=>{ TUNER_ON=!TUNER_ON; LS.set('tuner',TUNER_ON); tunLabel();
                              if(output) start(); };
 tunLabel();
@@ -442,6 +731,14 @@ el('chSel').innerHTML = Array.from({length:16},(_,i)=>
   `<option value="${i+1}">${i+1}</option>`).join('');
 el('chSel').value = String(CHANNEL);
 el('chSel').onchange = e=>{ CHANNEL=+e.target.value; LS.set('channel',CHANNEL); };
+el('themeSel').onchange = e=>{ THEME = e.target.value; LS.set('theme', THEME); applyTheme(); };
+applyTheme();
+// když je motiv 'system', reagujeme na přepnutí v systému za běhu
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()=>{
+  if(THEME === 'system') applyTheme();
+});
+el('langSel').value = LANG;
+el('langSel').onchange = e=>{ LANG = e.target.value; LS.set('lang', LANG); applyLang(); };
 el('prodSel').value = String(PRODUCT);
 el('prodSel').onchange = e=>{ PRODUCT=+e.target.value; LS.set('product',PRODUCT); if(output) start(); };
 
@@ -451,16 +748,20 @@ async function goStage(){
   try{ await screen.orientation.lock('landscape'); }catch(e){}
   await keepAwake();
 }
+function keepAwakeNote(){
+  el('wlNote').textContent = wakeState ? t('wake.'+wakeState) : '';
+}
 async function keepAwake(){
   try{
     if('wakeLock' in navigator && (!wakeLock || wakeLock.released)){
       wakeLock = await navigator.wakeLock.request('screen');
-      el('wlNote').textContent = 'Displej je držený rozsvícený (Wake Lock aktivní).';
+      wakeState = 'on';
     }
-  }catch(e){ el('wlNote').textContent = 'Wake Lock nedostupný – vypni v Androidu uspávání displeje ručně.'; }
+  }catch(e){ wakeState = 'off'; }
+  keepAwakeNote();
 }
 function lockLabel(){
-  el('lockBtn').textContent = LOCKED ? 'zamčeno' : 'odemčeno';
+  el('lockBtn').textContent = t(LOCKED ? 'btn.locked' : 'btn.unlocked');
   el('lockBtn').className = 'pill' + (LOCKED ? ' lock' : '');
 }
 el('lockBtn').onclick = ()=>{ LOCKED=!LOCKED; LS.set('locked',LOCKED); lockLabel(); };
@@ -475,38 +776,118 @@ el('fsBtn').onclick = goStage;
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') keepAwake(); });
 addEventListener('click', function once(){ keepAwake(); removeEventListener('click',once); });
 
-/* ============================ MIDI porty ================================ */
+/* ========================== transportní vrstva ==========================
+   Jedna a tatáž stránka jede ve dvou světech:
+     web    - Chrome na Androidu / desktopu, Web MIDI
+     native - iOS aplikace, WKWebView + CoreMIDI přes most
+   Zbytek kódu o tom neví a volá jen Transport.send().
+   ====================================================================== */
+const Transport = { kind:'none', ready:false, send(){} };
+
+/* ---------- nativní most (iOS) ---------- */
+function initNative(){
+  const port = window.webkit.messageHandlers.kemper;
+  Transport.kind = 'native';
+  Transport.send = b => port.postMessage({op:'send', bytes:[...b]});
+
+  // volá nativní strana
+  window.__midiIn = arr => onMidi({data: Uint8Array.from(arr)});
+  el('rescanBtn').onclick = ()=> port.postMessage({op:'rescan'});
+
+  // výpis všeho, co CoreMIDI vidí - bez toho se nedá poznat, jestli systém
+  // zařízení nevidí vůbec, nebo jen neprošlo hledáním podle jména
+  window.__midiPorts = payload => {
+    const list = payload.ports || [], h = payload.health || {};
+    const p = el('ports');
+    p.hidden = false;
+    const head = `<div class="tx">zdrojů ${h.sources} · cílů ${h.destinations} · `
+               + `zařízení ${h.devices} · hledání ${h.scans}×</div>`
+               + (h.client ? `<div class="rx">CoreMIDI klient chyba ${h.client}</div>` : '');
+    const devs = (payload.devices || []).map(d => {
+      const off = d.offline ? '<span class="tx">offline</span>' : '<span class="rx">online</span>';
+      const bits = [d.name || '(bez jména)', d.maker, d.model].filter(Boolean).join(' · ');
+      const ents = (d.entities || []).map(e =>
+        `<div>&nbsp;&nbsp;entita ${e.name || ''}: in ${e.sources} / out ${e.destinations}`
+        + (e.offline ? ' <span class="tx">offline</span>' : '') + '</div>').join('');
+      return `<div>▸ ${bits} — ${off}</div>` + ents;
+    }).join('');
+
+    p.innerHTML = head + devs + (list.length
+      ? list.map(d => {
+          const mark = d.active ? '<span class="rx">● </span>' : '<span class="tx">○ </span>';
+          const bits = [d.name || '(bez jména)', d.maker, d.model].filter(Boolean).join(' · ');
+          return `<div>${mark}${d.kind} ${d.index}: ${bits}${d.matched ? ' ✓' : ''}</div>`;
+        }).join('')
+      : `<div>${t('set.noPorts')}</div>`);
+  };
+
+  window.__midiDevice = (nameOrNull) => {
+    Transport.ready = !!nameOrNull;
+    el('portRow').hidden = true;
+    el('devName').textContent = nameOrNull || t('dev.notConnected');
+    if(nameOrNull) start();
+    else { [beaconT,pollT,wdT].forEach(clearInterval);
+           setStatus('off', t('st.connectUsb')); }
+  };
+  el('portRow').hidden = true;
+  el('devRow').hidden = false;
+  setStatus('off', t('st.searching'));
+  port.postMessage({op:'hello'});
+}
+
+/* ---------- Web MIDI (Android, desktop) ---------- */
+let midiAccess = null, input = null, output = null;
+
 function fillPorts(){
-  const ins=[...midi.inputs.values()], outs=[...midi.outputs.values()];
+  const ins=[...midiAccess.inputs.values()], outs=[...midiAccess.outputs.values()];
   const opt = p=>`<option value="${p.id}">${p.name}</option>`;
-  el('inSel').innerHTML  = '<option value="">— vyber —</option>'+ins.map(opt).join('');
-  el('outSel').innerHTML = '<option value="">— vyber —</option>'+outs.map(opt).join('');
+  const none = `<option value="">${t('set.choose')}</option>`;
+  el('inSel').innerHTML  = none + ins.map(opt).join('');
+  el('outSel').innerHTML = none + outs.map(opt).join('');
 
   const pick = (list, saved) => list.find(p=>p.id===saved)
                              || list.find(p=>/kemper|profiler|player/i.test(p.name));
   const gi = pick(ins, LS.get('in')), go = pick(outs, LS.get('out'));
   if(gi){ el('inSel').value=gi.id;  useIn(gi.id); }
   if(go){ el('outSel').value=go.id; useOut(go.id); }
-  if(!gi||!go) setStatus('off','připoj Player přes USB');
+  if(!gi||!go) setStatus('off', t('st.connectUsb'));
 }
 function useIn(id){
   if(input) input.onmidimessage=null;
-  input = midi.inputs.get(id)||null;
+  input = midiAccess.inputs.get(id)||null;
   if(input){ input.onmidimessage=onMidi; LS.set('in',id); }
-  ready();
+  webReady();
 }
-function useOut(id){ output = midi.outputs.get(id)||null; if(output) LS.set('out',id); ready(); }
-function ready(){ if(input&&output) start(); else setStatus('off','vyber MIDI vstup i výstup'); }
-el('inSel').onchange  = e=>useIn(e.target.value);
-el('outSel').onchange = e=>useOut(e.target.value);
+function useOut(id){ output = midiAccess.outputs.get(id)||null; if(output) LS.set('out',id); webReady(); }
+function webReady(){
+  Transport.ready = !!(input && output);
+  if(Transport.ready) start();
+  else setStatus('off', t('st.pickPorts'));
+}
 
-navigator.requestMIDIAccess({sysex:true}).then(a=>{
-  midi=a; a.onstatechange=fillPorts; fillPorts();
-}).catch(err=>{
-  setStatus('off','Web MIDI nedostupné');
-  el('rigName').textContent='Web MIDI nedostupné';
-  el('rigMeta').textContent=String(err.name||err);
-});
+function initWebMidi(){
+  Transport.kind = 'web';
+  Transport.send = b => output && output.send(b);
+  el('inSel').onchange  = e=>useIn(e.target.value);
+  el('outSel').onchange = e=>useOut(e.target.value);
+  navigator.requestMIDIAccess({sysex:true}).then(a=>{
+    midiAccess=a; a.onstatechange=fillPorts; fillPorts();
+  }).catch(err=>{
+    setStatus('off', t('st.noWebMidi'));
+    el('rigName').textContent = t('st.noWebMidi');
+    el('rigMeta').textContent=String(err.name||err);
+  });
+}
+
+if(window.webkit?.messageHandlers?.kemper) initNative();
+else if(navigator.requestMIDIAccess)        initWebMidi();
+else {
+  setStatus('off', t('st.noMidi'));
+  el('rigName').textContent = t('st.noMidi');
+  el('rigMeta').textContent = t('msg.iosApp');
+}
+
+applyLang();
 
 if('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 render();
