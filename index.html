@@ -217,8 +217,12 @@
       <div class="row"><label data-i18n="set.midiOut"></label><select id="outSel"></select></div>
     </div>
     <div class="row" id="devRow" hidden><label data-i18n="set.device"></label>
-      <span class="note-sm" style="flex:1" id="devName">–</span>
-      <button class="btn" id="rescanBtn" data-i18n="set.rescan"></button></div>
+      <span class="note-sm" style="flex:1" id="devName">–</span></div>
+
+    <div class="row"><label data-i18n="set.diag"></label>
+      <button class="btn" id="diagBtn">–</button>
+      <button class="btn" id="rescanBtn" data-i18n="set.rescan" hidden></button>
+      <span class="note-sm" style="flex:1" data-i18n="set.diagHint"></span></div>
     <div class="mon" id="ports" hidden></div>
     <div class="row"><label data-i18n="set.deviceType"></label>
       <select id="prodSel">
@@ -283,6 +287,7 @@ const POLL_MS   = 15000;  // Záloha, ne hlavní kanál. Beacon posílá změny 
                           // tohle jen podchytí přepnutí rigu přímo na přístroji,
                           // které neposílá Program Change. Při 3 s to dělalo
                           // 6 odpovědí/s, což je zbytečný provoz.
+let DIAG     = LS_BOOT('diag', false);      // výpis MIDI portů a zařízení
 let BANKLIST = LS_BOOT('banklist', true);   // pruh s obsahem banky
 let TUNER_ON = LS_BOOT('tuner', false);   // bit 5 beaconu = posílej data ladičky.
    // Default vypnuto: Player pak hlásil tuner mode = on a celoobrazovková
@@ -361,9 +366,10 @@ cs:{
  'set.theme':'Motiv','set.themeSystem':'podle systému','set.themeLight':'světlý','set.themeDark':'tmavý',
  'set.midiIn':'MIDI vstup','set.midiOut':'MIDI výstup','set.choose':'— vyber —',
  'set.device':'Zařízení','set.deviceType':'Typ přístroje',
+ 'set.diag':'Diagnostika připojení','set.diagHint':'Vypíše všechna MIDI zařízení a porty, které systém vidí. Zapni, když se Player nehlásí.',
  'set.rescan':'hledat znovu','set.noPorts':'systém nevidí žádné MIDI zařízení',
  'set.fxNames':'Názvy efektů','set.clearAll':'Smazat vše','set.copy':'Kopírovat',
- 'set.fxHint':'Zapni režim „názvy“ v liště a klepnutím na dlaždici pojmenuješ efekt, který je právě v daném slotu. Kemper posílá jen číselné ID typu – tabulku si takhle postupně vyklikáš. JSON můžeš zálohovat.',
+ 'set.fxHint':'Jména posílá Kemper sám, vyplňovat nic nemusíš. Když ti některé nesedí, zapni v liště režim „názvy“ a klepnutím na dlaždici ho přepiš – ruční název má přednost. JSON můžeš zálohovat.',
  'set.tuner':'Ladička',
  'set.banklist':'Obsah banky','set.banklistHint':'Pruh s pěti rigy v bance. Kemper je posílá sám, není co nastavovat.','tr.bankList':'obsah banky','set.tunerOn':'zapnutá','set.tunerOff':'vypnutá',
  'set.tunerHint':'Default vypnutá — celoobrazovkový překryv se pak neobjeví, ať Player posílá cokoliv. Zapnutím si řekneš i o data ladičky (bit 5 v beaconu).',
@@ -394,9 +400,10 @@ en:{
  'set.theme':'Theme','set.themeSystem':'system','set.themeLight':'light','set.themeDark':'dark',
  'set.midiIn':'MIDI input','set.midiOut':'MIDI output','set.choose':'— choose —',
  'set.device':'Device','set.deviceType':'Device type',
+ 'set.diag':'Connection diagnostics','set.diagHint':'Lists every MIDI device and port the system sees. Turn on when the Player does not show up.',
  'set.rescan':'rescan','set.noPorts':'the system sees no MIDI device',
  'set.fxNames':'Effect names','set.clearAll':'Clear all','set.copy':'Copy',
- 'set.fxHint':'Turn on “names” in the top bar, then tap a tile to name the effect currently in that slot. The Kemper only sends a numeric type ID – this is how you build the table. The JSON can be backed up.',
+ 'set.fxHint':'The Kemper sends the names itself, nothing to fill in. If one does not suit you, turn on “names” in the top bar and tap the tile to override it – a manual name wins. The JSON can be backed up.',
  'set.tuner':'Tuner',
  'set.banklist':'Bank contents','set.banklistHint':'Strip with the five rigs in the bank. The Kemper sends them on its own.','tr.bankList':'bank contents','set.tunerOn':'on','set.tunerOff':'off',
  'set.tunerHint':'Off by default — the fullscreen overlay then never appears, whatever the Player sends. Turning it on also requests tuner data (bit 5 of the beacon).',
@@ -427,9 +434,10 @@ de:{
  'set.theme':'Design','set.themeSystem':'System','set.themeLight':'hell','set.themeDark':'dunkel',
  'set.midiIn':'MIDI-Eingang','set.midiOut':'MIDI-Ausgang','set.choose':'— wählen —',
  'set.device':'Gerät','set.deviceType':'Gerätetyp',
+ 'set.diag':'Verbindungsdiagnose','set.diagHint':'Listet alle MIDI-Geräte und Ports auf, die das System sieht. Einschalten, wenn der Player fehlt.',
  'set.rescan':'neu suchen','set.noPorts':'System sieht kein MIDI-Gerät',
  'set.fxNames':'Effektnamen','set.clearAll':'Alle löschen','set.copy':'Kopieren',
- 'set.fxHint':'Schalte oben „Namen“ ein und tippe auf eine Kachel, um den Effekt im jeweiligen Slot zu benennen. Der Kemper sendet nur eine numerische Typ-ID – so baust du die Tabelle nach und nach auf. Das JSON lässt sich sichern.',
+ 'set.fxHint':'Der Kemper sendet die Namen selbst, es ist nichts auszufüllen. Passt einer nicht, schalte oben „Namen“ ein und tippe die Kachel an, um ihn zu überschreiben – ein manueller Name hat Vorrang. Das JSON lässt sich sichern.',
  'set.tuner':'Stimmgerät',
  'set.banklist':'Bank-Inhalt','set.banklistHint':'Leiste mit den fünf Rigs der Bank. Der Kemper sendet sie von selbst.','tr.bankList':'Bank-Inhalt','set.tunerOn':'an','set.tunerOff':'aus',
  'set.tunerHint':'Standardmäßig aus — die Vollbild-Überlagerung erscheint dann nie, egal was der Player sendet. Beim Einschalten werden auch Stimmgerätdaten angefordert (Bit 5 im Beacon).',
@@ -475,7 +483,7 @@ function applyLang(){
   document.querySelectorAll('[data-i18n-title]').forEach(e=> e.title = t(e.dataset.i18nTitle));
   document.querySelectorAll('[data-i18n-ph]').forEach(e=> e.placeholder = t(e.dataset.i18nPh));
   el('themeSel').value = THEME;
-  lockLabel(); editLabel(); tunLabel(); blLabel(); stats(); render();
+  lockLabel(); editLabel(); tunLabel(); blLabel(); diagLabel(); stats(); render();
   if(Transport.kind === 'web' && midiAccess) fillPorts();
   keepAwakeNote();
 }
@@ -721,6 +729,13 @@ function stats(){
 el('cfgBtn').onclick   = ()=>{ stats(); el('cfg').classList.add('show'); };
 el('cfgClose').onclick = ()=> el('cfg').classList.remove('show');
 el('monBtn').onclick   = ()=>{ const m=el('mon'); m.style.display = m.style.display==='none'?'block':'none'; };
+function diagLabel(){
+  el('diagBtn').textContent = t(DIAG ? 'set.tunerOn' : 'set.tunerOff');
+  el('ports').hidden = !DIAG;
+  el('rescanBtn').hidden = !DIAG;
+}
+el('diagBtn').onclick = ()=>{ DIAG=!DIAG; LS.set('diag',DIAG); diagLabel(); };
+
 const blLabel = ()=> el('blBtn').textContent = t(BANKLIST ? 'set.tunerOn' : 'set.tunerOff');
 el('blBtn').onclick = ()=>{ BANKLIST=!BANKLIST; LS.set('banklist',BANKLIST); blLabel(); render(); };
 const tunLabel = ()=> el('tunBtn').textContent = t(TUNER_ON ? 'set.tunerOn' : 'set.tunerOff');
@@ -799,7 +814,7 @@ function initNative(){
   window.__midiPorts = payload => {
     const list = payload.ports || [], h = payload.health || {};
     const p = el('ports');
-    p.hidden = false;
+    p.hidden = !DIAG;
     const head = `<div class="tx">zdrojů ${h.sources} · cílů ${h.destinations} · `
                + `zařízení ${h.devices} · hledání ${h.scans}×</div>`
                + (h.client ? `<div class="rx">CoreMIDI klient chyba ${h.client}</div>` : '');

@@ -3,7 +3,7 @@
 // index.html a diag.html jedou network-first: kdyz je sit, vezme se nova verze,
 // bez site se sahne do cache. Diky tomu se aktualizace projevi sama a nemusim
 // pri kazde zmene zvedat verzi cache. Ikony a manifest jsou cache-first.
-const CACHE = 'kemper-hud-v7';
+const CACHE = 'kemper-hud-v8';
 const FILES = ['.', 'index.html', 'diag.html', 'manifest.webmanifest',
                'icon-192.png', 'icon-512.png', 'icon-512-maskable.png'];
 
