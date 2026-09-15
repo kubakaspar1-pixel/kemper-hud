@@ -160,6 +160,24 @@
     overflow:auto;font:10px/1.45 ui-monospace,Menlo,monospace;color:var(--monoFg);white-space:pre-wrap;word-break:break-all}
   .mon .tx{color:var(--monoTx)} .mon .rx{color:var(--monoRx)}
   .note-sm{font-size:12px;color:var(--dim);line-height:1.5}
+  /* Nastaveni: skupiny, prepinace a napovedy schovane pod otaznikem */
+  .sec{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);
+    margin-top:4px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  .val{font-size:13px;color:var(--dim);flex:1;min-width:0}
+  .help{flex:0 0 auto;width:28px;height:28px;padding:0;border-radius:50%;background:transparent;
+    border:1px solid var(--line);color:var(--dim);font-size:13px;line-height:1;cursor:pointer}
+  .help.open{background:var(--accent);border-color:var(--accent);color:var(--onAccent)}
+  .hint{font-size:12.5px;color:var(--dim);line-height:1.55;margin-top:-6px;
+    padding:11px 13px;background:var(--panel2);border-radius:10px}
+  /* Tri sloupce: popisek, ovladaci prvek, otaznik. Treti sloupec drzime
+     i u radku bez napovedy, jinak by se ovladaci prvky rozjely. */
+  #cfg .row{display:grid;grid-template-columns:minmax(92px,32%) minmax(0,1fr) 28px;
+    gap:10px;align-items:center}
+  #cfg .row label{min-width:0}
+  #cfg .head{display:flex;gap:10px;align-items:center}
+  .ctl{display:flex;gap:8px;align-items:center;min-width:0}
+  .ctl>select,.ctl>.btn,.ctl>.val{flex:1;min-width:0}
+  .btn.tgl.on{background:var(--accent);border-color:var(--accent);color:var(--onAccent);font-weight:600}
 </style>
 </head>
 <body>
@@ -195,65 +213,77 @@
 <!-- nastaveni -->
 <div class="sheet" id="cfg">
   <div class="card">
-    <div class="row"><h2 data-i18n="set.title"></h2><span class="sp" style="flex:1"></span>
+    <div class="head"><h2 data-i18n="set.title"></h2><span class="sp" style="flex:1"></span>
       <button class="btn" id="cfgClose" data-i18n="set.close"></button></div>
 
+    <div class="sec" data-i18n="set.secApp"></div>
     <div class="row"><label data-i18n="set.theme"></label>
-      <select id="themeSel">
+      <div class="ctl"><select id="themeSel">
         <option value="system" data-i18n="set.themeSystem"></option>
         <option value="light"  data-i18n="set.themeLight"></option>
         <option value="dark"   data-i18n="set.themeDark"></option>
-      </select></div>
-
+      </select></div></div>
     <div class="row"><label data-i18n="set.language"></label>
-      <select id="langSel">
+      <div class="ctl"><select id="langSel">
         <option value="cs">Čeština</option>
         <option value="en">English</option>
         <option value="de">Deutsch</option>
-      </select></div>
+      </select></div></div>
 
+    <div class="sec" data-i18n="set.secConn"></div>
     <div id="portRow">
-      <div class="row"><label data-i18n="set.midiIn"></label><select id="inSel"></select></div>
-      <div class="row"><label data-i18n="set.midiOut"></label><select id="outSel"></select></div>
+      <div class="row"><label data-i18n="set.midiIn"></label>
+        <div class="ctl"><select id="inSel"></select></div></div>
+      <div class="row"><label data-i18n="set.midiOut"></label>
+        <div class="ctl"><select id="outSel"></select></div></div>
     </div>
     <div class="row" id="devRow" hidden><label data-i18n="set.device"></label>
-      <span class="note-sm" style="flex:1" id="devName">–</span></div>
-
-    <div class="row"><label data-i18n="set.diag"></label>
-      <button class="btn" id="diagBtn">–</button>
-      <button class="btn" id="rescanBtn" data-i18n="set.rescan" hidden></button>
-      <span class="note-sm" style="flex:1" data-i18n="set.diagHint"></span></div>
-    <div class="mon" id="ports" hidden></div>
+      <div class="ctl"><span class="val" id="devName">–</span></div></div>
     <div class="row"><label data-i18n="set.deviceType"></label>
-      <select id="prodSel">
+      <div class="ctl"><select id="prodSel">
         <option value="2">Profiler Player</option>
         <option value="0">Profiler (Stage/Head/Rack)</option>
-      </select></div>
+      </select></div></div>
+    <div class="row"><label data-i18n="set.channel"></label>
+      <div class="ctl"><select id="chSel"></select></div>
+      <button class="help" data-help="set.channelHint">?</button></div>
+    <div class="row"><label data-i18n="set.diag"></label>
+      <div class="ctl"><button class="btn tgl" id="diagBtn">–</button>
+        <button class="btn" id="rescanBtn" data-i18n="set.rescan" hidden></button></div>
+      <button class="help" data-help="set.diagHint">?</button></div>
+    <div class="mon" id="ports" hidden></div>
 
+    <div class="sec" data-i18n="set.secView"></div>
+    <div class="row" id="liveRow" hidden><label data-i18n="set.live"></label>
+      <div class="ctl"><button class="btn tgl" id="liveBtn">–</button></div>
+      <button class="help" data-help="set.liveHint">?</button></div>
+    <div class="note-sm" id="liveNote" hidden></div>
+    <div class="row"><label data-i18n="set.banklist"></label>
+      <div class="ctl"><button class="btn tgl" id="blBtn">–</button></div>
+      <button class="help" data-help="set.banklistHint">?</button></div>
+    <div class="row"><label data-i18n="set.tuner"></label>
+      <div class="ctl"><button class="btn tgl" id="tunBtn">–</button></div>
+      <button class="help" data-help="set.tunerHint">?</button></div>
     <div class="note-sm" id="wlNote"></div>
 
+    <div class="sec" data-i18n="set.secFx"></div>
     <div class="row"><label data-i18n="set.fxNames"></label>
-      <button class="btn" id="fxClear" data-i18n="set.clearAll"></button>
-      <button class="btn" id="fxCopy" data-i18n="set.copy"></button></div>
+      <div class="ctl"><button class="btn" id="fxClear" data-i18n="set.clearAll"></button>
+        <button class="btn" id="fxCopy" data-i18n="set.copy"></button></div>
+      <button class="help" data-help="set.fxHint">?</button></div>
     <textarea id="fxJson" spellcheck="false" placeholder='{"33":"Green Scream","113":"Hall Reverb"}'></textarea>
-    <div class="note-sm" data-i18n="set.fxHint"></div>
 
-    <div class="row"><label data-i18n="set.banklist"></label>
-      <button class="btn" id="blBtn">–</button>
-      <span class="note-sm" style="flex:1" data-i18n="set.banklistHint"></span></div>
-
-    <div class="row"><label data-i18n="set.tuner"></label>
-      <button class="btn" id="tunBtn">–</button>
-      <span class="note-sm" style="flex:1" data-i18n="set.tunerHint"></span></div>
-
-    <div class="row"><label data-i18n="set.channel"></label>
-      <select id="chSel"></select>
-      <span class="note-sm" style="flex:1" data-i18n="set.channelHint"></span></div>
-
+    <div class="sec" data-i18n="set.secDebug"></div>
     <div class="row"><label data-i18n="set.traffic"></label>
-      <span class="note-sm" style="flex:1" id="stats">–</span></div>
-
-    <div class="row"><label data-i18n="set.midiLog"></label><button class="btn" id="monBtn" data-i18n="set.onOff"></button></div>
+      <div class="ctl"><span class="val" id="stats">–</span></div></div>
+    <div class="row"><label data-i18n="set.demo"></label>
+      <div class="ctl"><button class="btn tgl" id="demoBtn">–</button></div>
+      <button class="help" data-help="set.demoHint">?</button></div>
+    <div class="note-sm" id="demoNote" hidden></div>
+    <div class="row" id="watchRow" hidden><label data-i18n="set.watch"></label>
+      <div class="ctl"><span class="val" id="watchState">–</span></div></div>
+    <div class="row"><label data-i18n="set.midiLog"></label>
+      <div class="ctl"><button class="btn" id="monBtn" data-i18n="set.onOff"></button></div></div>
     <div class="mon" id="mon" style="display:none"></div>
   </div>
 </div>
@@ -288,6 +318,8 @@ const POLL_MS   = 15000;  // Záloha, ne hlavní kanál. Beacon posílá změny 
                           // které neposílá Program Change. Při 3 s to dělalo
                           // 6 odpovědí/s, což je zbytečný provoz.
 let DIAG     = LS_BOOT('diag', false);      // výpis MIDI portů a zařízení
+let LIVE     = LS_BOOT('live', false);      // živá aktivita na zamčené obrazovce (jen iOS)
+let DEMO     = LS_BOOT('demo', false);      // vymyšlená data, když není po ruce Kemper
 let BANKLIST = LS_BOOT('banklist', true);   // pruh s obsahem banky
 let TUNER_ON = LS_BOOT('tuner', false);   // bit 5 beaconu = posílej data ladičky.
    // Default vypnuto: Player pak hlásil tuner mode = on a celoobrazovková
@@ -357,16 +389,24 @@ cs:{
  'st.disconnected':'odpojeno','st.connected':'připojeno',
  'st.aliveNoAnswer':'přístroj žije, ale neodpovídá','st.silent':'ticho na lince',
  'st.pickPorts':'vyber MIDI vstup i výstup','st.connectUsb':'připoj Player přes USB',
+ 'st.demo':'demo režim',
  'st.searching':'hledám Player…','st.noWebMidi':'Web MIDI nedostupné','st.noMidi':'MIDI nedostupné',
  'msg.iosApp':'na iOS otevři nativní aplikaci','dev.notConnected':'Player nepřipojen',
  'btn.names':'názvy','btn.namesOn':'názvy: zapnuto','btn.unlocked':'odemčeno','btn.locked':'zamčeno',
  'title.fullscreen':'Celá obrazovka','title.settings':'Nastavení',
  'tuner.close':'klepnutím zavřeš',
  'set.title':'Nastavení','set.close':'Zavřít','set.language':'Jazyk',
+ 'set.secApp':'Aplikace', 'set.secConn':'Připojení', 'set.secView':'Zobrazení', 'set.secFx':'Názvy efektů', 'set.secDebug':'Ladění',
  'set.theme':'Motiv','set.themeSystem':'podle systému','set.themeLight':'světlý','set.themeDark':'tmavý',
  'set.midiIn':'MIDI vstup','set.midiOut':'MIDI výstup','set.choose':'— vyber —',
  'set.device':'Zařízení','set.deviceType':'Typ přístroje',
  'set.diag':'Diagnostika připojení','set.diagHint':'Vypíše všechna MIDI zařízení a porty, které systém vidí. Zapni, když se Player nehlásí.',
+ 'set.live':'Zamčená obrazovka',
+ 'set.liveHint':'Ukáže aktuální rig na zamčené obrazovce a v Dynamic Island. Aplikace kvůli tomu běží na pozadí a drží si zvukový výstup, takže ubírá baterii a přeruší hudbu puštěnou z telefonu.',
+ 'set.liveNA':'Živé aktivity jsou vypnuté v Nastavení iOS → Rig Viewer → Živé aktivity.',
+ 'set.liveRun':'Běží na zamčené obrazovce.',
+ 'live.audioOn':'ticho na pozadí hraje',
+ 'live.gap':'nejdelší mezera {0} s','live.audioOff':'POZOR: ticho na pozadí neběží, po zamčení se přestane obnovovat',
  'set.rescan':'hledat znovu','set.noPorts':'systém nevidí žádné MIDI zařízení',
  'set.fxNames':'Názvy efektů','set.clearAll':'Smazat vše','set.copy':'Kopírovat',
  'set.fxHint':'Jména posílá Kemper sám, vyplňovat nic nemusíš. Když ti některé nesedí, zapni v liště režim „názvy“ a klepnutím na dlaždici ho přepiš – ruční název má přednost. JSON můžeš zálohovat.',
@@ -376,6 +416,9 @@ cs:{
  'set.channel':'MIDI kanál',
  'set.channelHint':'Na kterém kanálu Player poslouchá. Když ovládání nereaguje, je to první, co zkusit.',
  'set.traffic':'Provoz','set.midiLog':'MIDI log','set.onOff':'zap/vyp',
+ 'set.demo':'Demo režim',
+ 'demo.stats':'popudů {0} · stránka provedla {1} (chyb {2}) · vrátila stav {3}×','set.demoHint':'Podstrčí vymyšlené rigy, ať si aplikaci vyzkoušíš bez Kemperu. Rig se sám mění po pár vteřinách, dlaždice jdou přepínat a stav jde i na hodinky a na zamčenou obrazovku. Skutečná komunikace je při tom vypnutá.',
+  'set.watch':'Hodinky','watch.none':'nespárované','watch.notInstalled':'aplikace není hlášená jako nainstalovaná','watch.idle':'spárované, aplikace neběží','watch.live':'spojeno, posílám stav',
  'dlg.nameEffect':'Pojmenovat efekt','dlg.cancel':'Zrušit','dlg.save':'Uložit',
  'dlg.placeholder':'např. Green Scream','dlg.title':'Slot {0} · typ #{1}',
  'fx.type':'typ {0}','err.json':'Neplatný JSON','ask.clearFx':'Smazat všechny názvy efektů?',
@@ -391,16 +434,24 @@ en:{
  'st.disconnected':'disconnected','st.connected':'connected',
  'st.aliveNoAnswer':'device alive, but not answering','st.silent':'no data',
  'st.pickPorts':'select MIDI input and output','st.connectUsb':'connect the Player via USB',
+ 'st.demo':'demo mode',
  'st.searching':'looking for the Player…','st.noWebMidi':'Web MIDI unavailable','st.noMidi':'MIDI unavailable',
  'msg.iosApp':'on iOS use the native app','dev.notConnected':'Player not connected',
  'btn.names':'names','btn.namesOn':'names: on','btn.unlocked':'unlocked','btn.locked':'locked',
  'title.fullscreen':'Fullscreen','title.settings':'Settings',
  'tuner.close':'tap to close',
  'set.title':'Settings','set.close':'Close','set.language':'Language',
+ 'set.secApp':'App', 'set.secConn':'Connection', 'set.secView':'Display', 'set.secFx':'Effect names', 'set.secDebug':'Debugging',
  'set.theme':'Theme','set.themeSystem':'system','set.themeLight':'light','set.themeDark':'dark',
  'set.midiIn':'MIDI input','set.midiOut':'MIDI output','set.choose':'— choose —',
  'set.device':'Device','set.deviceType':'Device type',
  'set.diag':'Connection diagnostics','set.diagHint':'Lists every MIDI device and port the system sees. Turn on when the Player does not show up.',
+ 'set.live':'Lock screen',
+ 'set.liveHint':'Shows the current rig on the lock screen and in the Dynamic Island. The app keeps running in the background and holds the audio output, so it costs battery and interrupts music played from the phone.',
+ 'set.liveNA':'Live Activities are off in iOS Settings → Rig Viewer → Live Activities.',
+ 'set.liveRun':'Running on the lock screen.',
+ 'live.audioOn':'background silence playing',
+ 'live.gap':'longest gap {0} s','live.audioOff':'WARNING: background silence stopped, updates will freeze when locked',
  'set.rescan':'rescan','set.noPorts':'the system sees no MIDI device',
  'set.fxNames':'Effect names','set.clearAll':'Clear all','set.copy':'Copy',
  'set.fxHint':'The Kemper sends the names itself, nothing to fill in. If one does not suit you, turn on “names” in the top bar and tap the tile to override it – a manual name wins. The JSON can be backed up.',
@@ -410,6 +461,9 @@ en:{
  'set.channel':'MIDI channel',
  'set.channelHint':'The channel the Player listens on. If control does not respond, check this first.',
  'set.traffic':'Traffic','set.midiLog':'MIDI log','set.onOff':'on/off',
+ 'set.demo':'Demo mode',
+ 'demo.stats':'ticks {0} · page ran {1} (errors {2}) · replied {3}×','set.demoHint':'Feeds made-up rigs so you can try the app without a Kemper. The rig changes every few seconds, tiles can be toggled, and the state also reaches the watch and the lock screen. Real communication is off meanwhile.',
+  'set.watch':'Watch','watch.none':'not paired','watch.notInstalled':'app not reported as installed','watch.idle':'paired, app not running','watch.live':'connected, sending state',
  'dlg.nameEffect':'Name effect','dlg.cancel':'Cancel','dlg.save':'Save',
  'dlg.placeholder':'e.g. Green Scream','dlg.title':'Slot {0} · type #{1}',
  'fx.type':'type {0}','err.json':'Invalid JSON','ask.clearFx':'Delete all effect names?',
@@ -425,16 +479,24 @@ de:{
  'st.disconnected':'getrennt','st.connected':'verbunden',
  'st.aliveNoAnswer':'Gerät lebt, antwortet aber nicht','st.silent':'keine Daten',
  'st.pickPorts':'MIDI-Ein- und Ausgang wählen','st.connectUsb':'Player per USB anschließen',
+ 'st.demo':'Demo-Modus',
  'st.searching':'suche Player…','st.noWebMidi':'Web MIDI nicht verfügbar','st.noMidi':'MIDI nicht verfügbar',
  'msg.iosApp':'unter iOS die native App nutzen','dev.notConnected':'Player nicht verbunden',
  'btn.names':'Namen','btn.namesOn':'Namen: an','btn.unlocked':'entsperrt','btn.locked':'gesperrt',
  'title.fullscreen':'Vollbild','title.settings':'Einstellungen',
  'tuner.close':'zum Schließen tippen',
  'set.title':'Einstellungen','set.close':'Schließen','set.language':'Sprache',
+ 'set.secApp':'App', 'set.secConn':'Verbindung', 'set.secView':'Anzeige', 'set.secFx':'Effektnamen', 'set.secDebug':'Fehlersuche',
  'set.theme':'Design','set.themeSystem':'System','set.themeLight':'hell','set.themeDark':'dunkel',
  'set.midiIn':'MIDI-Eingang','set.midiOut':'MIDI-Ausgang','set.choose':'— wählen —',
  'set.device':'Gerät','set.deviceType':'Gerätetyp',
  'set.diag':'Verbindungsdiagnose','set.diagHint':'Listet alle MIDI-Geräte und Ports auf, die das System sieht. Einschalten, wenn der Player fehlt.',
+ 'set.live':'Sperrbildschirm',
+ 'set.liveHint':'Zeigt das aktuelle Rig auf dem Sperrbildschirm und in der Dynamic Island. Die App läuft dafür im Hintergrund und belegt den Audioausgang, das kostet Akku und unterbricht Musik vom Telefon.',
+ 'set.liveNA':'Live-Aktivitäten sind in den iOS-Einstellungen → Rig Viewer → Live-Aktivitäten ausgeschaltet.',
+ 'set.liveRun':'Läuft auf dem Sperrbildschirm.',
+ 'live.audioOn':'Hintergrundstille läuft',
+ 'live.gap':'längste Lücke {0} s','live.audioOff':'ACHTUNG: Hintergrundstille gestoppt, Aktualisierung friert im gesperrten Zustand ein',
  'set.rescan':'neu suchen','set.noPorts':'System sieht kein MIDI-Gerät',
  'set.fxNames':'Effektnamen','set.clearAll':'Alle löschen','set.copy':'Kopieren',
  'set.fxHint':'Der Kemper sendet die Namen selbst, es ist nichts auszufüllen. Passt einer nicht, schalte oben „Namen“ ein und tippe die Kachel an, um ihn zu überschreiben – ein manueller Name hat Vorrang. Das JSON lässt sich sichern.',
@@ -444,6 +506,9 @@ de:{
  'set.channel':'MIDI-Kanal',
  'set.channelHint':'Der Kanal, auf dem der Player hört. Wenn die Steuerung nicht reagiert, zuerst hier nachsehen.',
  'set.traffic':'Datenverkehr','set.midiLog':'MIDI-Log','set.onOff':'an/aus',
+ 'set.demo':'Demo-Modus',
+ 'demo.stats':'Impulse {0} · Seite ausgeführt {1} (Fehler {2}) · geantwortet {3}×','set.demoHint':'Spielt erfundene Rigs ein, damit du die App ohne Kemper ausprobieren kannst. Das Rig wechselt alle paar Sekunden, Kacheln lassen sich schalten, und der Status geht auch an die Uhr und den Sperrbildschirm. Die echte Kommunikation ruht solange.',
+  'set.watch':'Uhr','watch.none':'nicht gekoppelt','watch.notInstalled':'App nicht als installiert gemeldet','watch.idle':'gekoppelt, App läuft nicht','watch.live':'verbunden, Status wird gesendet',
  'dlg.nameEffect':'Effekt benennen','dlg.cancel':'Abbrechen','dlg.save':'Speichern',
  'dlg.placeholder':'z. B. Green Scream','dlg.title':'Slot {0} · Typ #{1}',
  'fx.type':'Typ {0}','err.json':'Ungültiges JSON','ask.clearFx':'Alle Effektnamen löschen?',
@@ -483,7 +548,9 @@ function applyLang(){
   document.querySelectorAll('[data-i18n-title]').forEach(e=> e.title = t(e.dataset.i18nTitle));
   document.querySelectorAll('[data-i18n-ph]').forEach(e=> e.placeholder = t(e.dataset.i18nPh));
   el('themeSel').value = THEME;
-  lockLabel(); editLabel(); tunLabel(); blLabel(); diagLabel(); stats(); render();
+  closeHints();
+  lockLabel(); editLabel(); tunLabel(); blLabel(); diagLabel(); liveLabel(); demoLabel();
+  stats(); render();
   if(Transport.kind === 'web' && midiAccess) fillPorts();
   keepAwakeNote();
 }
@@ -510,10 +577,83 @@ function toggleSlot(key){
   const st = state.slots[key];
   if(!slot || !st || !st.type) return;          // prázdný slot nemá co vypínat
   const want = !st.on;
+  if(DEMO){ st.on = want; render(); return; }   // v demu není komu posílat
   cc(slot.cc, want ? 1 : 0);
   st.on = want; render();                       // okamžitá odezva
   // za chvíli si vyžádáme skutečný stav; kdyby to neprošlo, dlaždice se vrátí
   setTimeout(()=>reqParam(slot.page, P_STATE), 150);
+}
+
+/* ---------------------- demo režim ------------------------------------- */
+/* Vymyšlená data místo Kemperu. Zapisují se rovnou do `state` a projdou
+   běžným render(), takže se stejně jako doopravdy dostanou i na hodinky
+   a do živé aktivity. Skutečné dotazy na přístroj při tom neběží.        */
+
+const DEMO_FX = {33:'Green Scream', 9:'Wah Wah', 113:'Tape Delay', 121:'Hall Reverb',
+                 41:'Muffin', 57:'Air Chorus', 87:'Rotary Speaker', 17:'Studio Comp'};
+
+const DEMO_RIGS = [
+  {rig:'Tweed Crunch',  slots:{A:33, X:9, DLY:113, REV:121}, off:['DLY']},
+  {rig:'Clean Chorus',  slots:{MOD:57, REV:121},             off:[]},
+  {rig:'Lead Stack',    slots:{A:33, D:17, DLY:113, REV:121},off:[]},
+  {rig:'Ambient Pad',   slots:{MOD:87, DLY:113, REV:121},    off:['MOD']},
+  {rig:'Funk Wah',      slots:{X:9, MOD:57},                 off:[]},
+  {rig:'Blues Driver',  slots:{B:41, REV:121},               off:[]},
+  {rig:'Country Twang', slots:{A:17, DLY:113},               off:[]},
+  {rig:'Fat Rhythm',    slots:{A:33, C:17, REV:121},         off:['C']},
+  {rig:'Octave Lead',   slots:{X:33, MOD:87, DLY:113},       off:[]},
+  {rig:'Acoustic Sim',  slots:{MOD:57, REV:121},             off:[]},
+  {rig:'Heavy Chug',    slots:{A:41, D:17, REV:121},         off:[]},
+  {rig:'Slapback',      slots:{A:33, DLY:113},               off:[]},
+  {rig:'Surf Verb',     slots:{X:9, REV:121},                off:[]},
+  {rig:'Solo Boost',    slots:{A:33, B:41, DLY:113, REV:121},off:['B']},
+  {rig:'Night Clean',   slots:{MOD:57, DLY:113, REV:121},    off:['DLY']},
+];
+
+let demoT = null, demoIdx = 0;
+// Skutečný Kemper přepíná preset jednou za píseň, ne každých pár vteřin.
+// Kratší perioda tady narážela na rozpočet, kterým systém přiškrcuje
+// aktualizace živé aktivity z pozadí.
+const DEMO_PERIOD = 15;
+
+function demoTick(){
+  const idx = demoIdx % DEMO_RIGS.length, r = DEMO_RIGS[idx];
+  state.pc = idx; state.bankMsb = 0;
+  state.rigName = r.rig;
+  state.rigDate = '15.09.2026';
+  state.slots = {};
+  SLOTS.forEach(s => state.slots[s.key] = {type:0, on:false});
+  Object.entries(r.slots).forEach(([k,v]) =>
+    state.slots[k] = {type:v, on: !r.off.includes(k)});
+  const b = Math.floor(idx/5);
+  state.bank = { name:'Demo '+(b+1),
+                 rigs: DEMO_RIGS.slice(b*5, b*5+5).map(x=>x.rig) };
+  demoIdx++;
+  render();
+}
+
+// Na iOS demo netiká ze stránky, ale z nativní strany — stejnou cestou jako
+// skutečné MIDI. Časovač uvnitř WebView by se totiž po zamčení telefonu
+// přiškrtil a zamčená obrazovka by zamrzla, i kdyby zbytek řetězu fungoval.
+window.__demoTick = () => { if(DEMO) demoTick(); };
+
+function applyDemo(){
+  clearInterval(demoT); demoT = null;
+  if(Transport.kind === 'native'){
+    try{ window.webkit.messageHandlers.kemper.postMessage({op:'demo', on:DEMO}); }catch(e){}
+  }
+  if(DEMO){
+    [beaconT,pollT,wdT].forEach(clearInterval);   // ať do toho přístroj nemluví
+    demoIdx = 0; demoTick();
+    if(Transport.kind !== 'native') demoT = setInterval(demoTick, DEMO_PERIOD*1000);
+    setStatus('live', t('st.demo'));
+  } else {
+    state.rigName=''; state.rigDate=''; state.pc=null; state.bankMsb=null;
+    state.slots={}; state.bank={name:'',rigs:[]};
+    render();
+    if(Transport.ready) start();
+    else setStatus('off', t('st.connectUsb'));
+  }
 }
 
 function refreshAll(){
@@ -521,6 +661,7 @@ function refreshAll(){
   SLOTS.forEach(s=>{ reqParam(s.page,P_TYPE); reqParam(s.page,P_STATE); });
 }
 function start(){
+  if(DEMO) return;               // v demu se s přístrojem nekomunikuje
   [beaconT,pollT,wdT].forEach(clearInterval);
   beacon(true); refreshAll();
   beaconT = setInterval(()=>beacon(false), LEASE_SEC*500);
@@ -610,7 +751,8 @@ function onMidi(e){
 
 /* =============================== render ================================= */
 const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const fxLabel = id => id===0 ? '—' : (fxNames[id] || fxAuto[id] || t('fx.type', id));
+const fxLabel = id => id===0 ? '—'
+  : (fxNames[id] || fxAuto[id] || DEMO_FX[id] || t('fx.type', id));
 
 function render(){
   el('rigName').textContent = state.rigName || '—';
@@ -654,6 +796,8 @@ function render(){
             && state.tuner.on
             && (Date.now() - lastTuner < 1500)
             && (Date.now() - tunerMuted > 20000);
+  pushWatch();
+
   const t=el('tuner'); t.classList.toggle('show', live);
   if(live){
     el('tNote').textContent = NOTES[state.tuner.note%12] ?? '–';
@@ -664,6 +808,29 @@ function render(){
     n.style.background = Math.abs(c)<=2 ? 'var(--on)' : (c<0?'var(--flat)':'var(--sharp)');
   }
 }
+// Stav pro hodinky. Posílá se jen při skutečné změně, ať se spojení
+// nezahlcuje — render() běží při každé příchozí MIDI zprávě.
+let lastWatchJson = '';
+function pushWatch(){
+  if(Transport.kind !== 'native') return;
+  const idx = state.pc==null ? null : (state.bankMsb||0)*128 + state.pc;
+  const payload = {
+    op: 'state',
+    rig: state.rigName,
+    bank:  idx==null ? null : Math.floor(idx/5)+1,
+    rigNo: idx==null ? null : idx%5+1,
+    slots: SLOTS.map(s=>{
+      const v = state.slots[s.key] || {type:0,on:false};
+      return { slot:s.key, type:v.type, on:v.on,
+               name: v.type ? (fxNames[v.type] || fxAuto[v.type] || null) : null };
+    })
+  };
+  const j = JSON.stringify(payload);
+  if(j === lastWatchJson) return;
+  lastWatchJson = j;
+  try{ window.webkit.messageHandlers.kemper.postMessage(payload); }catch(e){}
+}
+
 function setStatus(kind,txt){
   el('dot').className='dot'+(kind==='live'?' live':kind==='warn'?' warn':'');
   el('status').textContent=txt;
@@ -726,19 +893,52 @@ function stats(){
     (rows.length ? rows.map(([k,v])=>`${trafficLabel(k)}: ${v}`).join(' · ')
                  : t('stats.none'));
 }
+// Nápovědy zabíraly půlku panelu. Teď se rozbalí pod řádkem až na vyžádání.
+el('cfg').addEventListener('click', e=>{
+  const b = e.target.closest('.help'); if(!b) return;
+  const row = b.closest('.row'), next = row.nextElementSibling;
+  if(next && next.classList.contains('hint')){ next.remove(); b.classList.remove('open'); return; }
+  const h = document.createElement('div');
+  h.className = 'hint';
+  h.textContent = t(b.dataset.help);
+  row.after(h);
+  b.classList.add('open');
+});
+function closeHints(){
+  document.querySelectorAll('#cfg .hint').forEach(h=>h.remove());
+  document.querySelectorAll('#cfg .help.open').forEach(b=>b.classList.remove('open'));
+}
+
 el('cfgBtn').onclick   = ()=>{ stats(); el('cfg').classList.add('show'); };
 el('cfgClose').onclick = ()=> el('cfg').classList.remove('show');
 el('monBtn').onclick   = ()=>{ const m=el('mon'); m.style.display = m.style.display==='none'?'block':'none'; };
+/// Přepínač vypadá stejně všude: text a zvýraznění, když je zapnutý.
+function toggleBtn(id, on){
+  const b = el(id);
+  b.textContent = t(on ? 'set.tunerOn' : 'set.tunerOff');
+  b.classList.toggle('on', on);
+}
 function diagLabel(){
-  el('diagBtn').textContent = t(DIAG ? 'set.tunerOn' : 'set.tunerOff');
+  toggleBtn('diagBtn', DIAG);
   el('ports').hidden = !DIAG;
   el('rescanBtn').hidden = !DIAG;
 }
 el('diagBtn').onclick = ()=>{ DIAG=!DIAG; LS.set('diag',DIAG); diagLabel(); };
 
-const blLabel = ()=> el('blBtn').textContent = t(BANKLIST ? 'set.tunerOn' : 'set.tunerOff');
+// Živá aktivita. Zapíná ji nativní strana; web jen drží přepínač.
+function liveLabel(){ toggleBtn('liveBtn', LIVE); }
+function sendLive(){
+  if(Transport.kind !== 'native') return;
+  try{ window.webkit.messageHandlers.kemper.postMessage({op:'live', on:LIVE}); }catch(e){}
+}
+el('liveBtn').onclick = ()=>{ LIVE=!LIVE; LS.set('live',LIVE); liveLabel(); sendLive(); };
+
+const demoLabel = ()=> toggleBtn('demoBtn', DEMO);
+el('demoBtn').onclick = ()=>{ DEMO=!DEMO; LS.set('demo',DEMO); demoLabel(); applyDemo(); };
+
+const blLabel = ()=> toggleBtn('blBtn', BANKLIST);
 el('blBtn').onclick = ()=>{ BANKLIST=!BANKLIST; LS.set('banklist',BANKLIST); blLabel(); render(); };
-const tunLabel = ()=> el('tunBtn').textContent = t(TUNER_ON ? 'set.tunerOn' : 'set.tunerOff');
+const tunLabel = ()=> toggleBtn('tunBtn', TUNER_ON);
 el('tunBtn').onclick = ()=>{ TUNER_ON=!TUNER_ON; LS.set('tuner',TUNER_ON); tunLabel();
                              if(output) start(); };
 tunLabel();
@@ -844,10 +1044,44 @@ function initNative(){
     else { [beaconT,pollT,wdT].forEach(clearInterval);
            setStatus('off', t('st.connectUsb')); }
   };
+  // Zpráva o tom, jak na tom aktivita doopravdy je — systém ji může odmítnout.
+  window.__liveState = s => {
+    const n = el('liveNote');
+    let txt = '';
+    if(!s.available)   txt = t('set.liveNA');
+    else if(s.running){
+      txt = t('set.liveRun') + ' · ' + t(s.audio ? 'live.audioOn' : 'live.audioOff');
+      if(s.maxGap != null) txt += ' · ' + t('live.gap', s.maxGap);
+    }
+    n.textContent = txt;
+    n.hidden = !txt;
+  };
+
+  // Kolik popudů z nativní strany stránka opravdu obsloužila.
+  window.__demoStats = d => {
+    const n = el('demoNote');
+    n.hidden = false;
+    n.textContent = t('demo.stats', d.ticks, d.evalOk, d.evalFail, d.state);
+  };
+
+  // Stav hodinek. Bez něj se nepozná, jestli mlčí telefon, nebo hodinky.
+  window.__watchState = w => {
+    el('watchRow').hidden = !w.supported;
+    const bits = [];
+    if(!w.paired)         bits.push(t('watch.none'));
+    else if(w.reachable)  bits.push(t('watch.live'));
+    else                  bits.push(t('watch.idle'));
+    if(w.paired && !w.installed) bits.push(t('watch.notInstalled'));
+    el('watchState').textContent = bits.join(' · ');
+  };
+
   el('portRow').hidden = true;
   el('devRow').hidden = false;
+  el('liveRow').hidden = false;
+  liveLabel();
   setStatus('off', t('st.searching'));
   port.postMessage({op:'hello'});
+  sendLive();
 }
 
 /* ---------- Web MIDI (Android, desktop) ---------- */
@@ -888,6 +1122,7 @@ function initWebMidi(){
   navigator.requestMIDIAccess({sysex:true}).then(a=>{
     midiAccess=a; a.onstatechange=fillPorts; fillPorts();
   }).catch(err=>{
+    if(DEMO) return;                 // v demu se na MIDI nečeká
     setStatus('off', t('st.noWebMidi'));
     el('rigName').textContent = t('st.noWebMidi');
     el('rigMeta').textContent=String(err.name||err);
@@ -896,13 +1131,14 @@ function initWebMidi(){
 
 if(window.webkit?.messageHandlers?.kemper) initNative();
 else if(navigator.requestMIDIAccess)        initWebMidi();
-else {
+else if(!DEMO) {
   setStatus('off', t('st.noMidi'));
   el('rigName').textContent = t('st.noMidi');
   el('rigMeta').textContent = t('msg.iosApp');
 }
 
 applyLang();
+if(DEMO) applyDemo();
 
 if('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 render();
