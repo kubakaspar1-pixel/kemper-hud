@@ -152,7 +152,14 @@
   .row label{font-size:12px;color:var(--dim);min-width:96px}
   select,input,textarea,.btn{background:var(--panel2);color:var(--fg);border:1px solid var(--line);
     border-radius:10px;padding:9px 12px;font-size:14px;flex:1;min-width:0}
-  .btn{flex:0 0 auto;text-align:center}
+  .btn{flex:0 0 auto;text-align:center;white-space:nowrap}
+  /* Dvojice tlačítek přes celou šířku karty — v úzkém sloupci mřížky
+     se „Smazat vše" lámalo do dvou řádků. */
+  .btnRow{display:flex;gap:10px}
+  .btnRow>.btn{flex:1}
+  /* Schované sekce musí uvnitř zachovat rozestupy i roztažení prvků,
+     které jinak dává karta svým přímým potomkům. */
+  #fxBox,#dbgBox{display:flex;flex-direction:column;gap:14px}
   .btn:active{background:var(--line)}
   .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--onAccent);font-weight:600}
   textarea{font:11px/1.5 ui-monospace,Menlo,monospace;min-height:110px;resize:vertical}
@@ -160,6 +167,9 @@
     overflow:auto;font:10px/1.45 ui-monospace,Menlo,monospace;color:var(--monoFg);white-space:pre-wrap;word-break:break-all}
   .mon .tx{color:var(--monoTx)} .mon .rx{color:var(--monoRx)}
   .note-sm{font-size:12px;color:var(--dim);line-height:1.5}
+  /* Vlastní display (grid, flex) přebíjí atribut hidden z výchozího stylu
+     prohlížeče. Bez téhle pojistky zůstávají „skryté" prvky vidět. */
+  [hidden]{display:none !important}
   /* Nastaveni: skupiny, prepinace a napovedy schovane pod otaznikem */
   .sec{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);
     margin-top:4px;padding-bottom:7px;border-bottom:1px solid var(--line)}
@@ -177,7 +187,15 @@
   #cfg .head{display:flex;gap:10px;align-items:center}
   .ctl{display:flex;gap:8px;align-items:center;min-width:0}
   .ctl>select,.ctl>.btn,.ctl>.val{flex:1;min-width:0}
-  .btn.tgl.on{background:var(--accent);border-color:var(--accent);color:var(--onAccent);font-weight:600}
+  /* Přepínač. Stav drží aria-checked, ať ho čtou i odečítače obrazovky. */
+  .sw{position:relative;flex:0 0 auto;width:48px;height:29px;padding:0;border-radius:999px;
+    background:var(--panel2);border:1px solid var(--line);cursor:pointer;
+    transition:background .15s ease,border-color .15s ease}
+  .sw::after{content:'';position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;
+    background:var(--fg);opacity:.45;
+    transition:transform .15s ease,opacity .15s ease,background .15s ease}
+  .sw[aria-checked="true"]{background:var(--accent);border-color:var(--accent)}
+  .sw[aria-checked="true"]::after{transform:translateX(19px);background:var(--onAccent);opacity:1}
 </style>
 </head>
 <body>
@@ -248,43 +266,55 @@
       <div class="ctl"><select id="chSel"></select></div>
       <button class="help" data-help="set.channelHint">?</button></div>
     <div class="row"><label data-i18n="set.diag"></label>
-      <div class="ctl"><button class="btn tgl" id="diagBtn">–</button>
+      <div class="ctl"><button class="sw" role="switch" aria-checked="false" id="diagBtn"></button>
         <button class="btn" id="rescanBtn" data-i18n="set.rescan" hidden></button></div>
       <button class="help" data-help="set.diagHint">?</button></div>
     <div class="mon" id="ports" hidden></div>
 
     <div class="sec" data-i18n="set.secView"></div>
     <div class="row" id="liveRow" hidden><label data-i18n="set.live"></label>
-      <div class="ctl"><button class="btn tgl" id="liveBtn">–</button></div>
+      <div class="ctl"><button class="sw" role="switch" aria-checked="false" id="liveBtn"></button></div>
       <button class="help" data-help="set.liveHint">?</button></div>
     <div class="note-sm" id="liveNote" hidden></div>
     <div class="row"><label data-i18n="set.banklist"></label>
-      <div class="ctl"><button class="btn tgl" id="blBtn">–</button></div>
+      <div class="ctl"><button class="sw" role="switch" aria-checked="false" id="blBtn"></button></div>
       <button class="help" data-help="set.banklistHint">?</button></div>
     <div class="row"><label data-i18n="set.tuner"></label>
-      <div class="ctl"><button class="btn tgl" id="tunBtn">–</button></div>
+      <div class="ctl"><button class="sw" role="switch" aria-checked="false" id="tunBtn"></button></div>
       <button class="help" data-help="set.tunerHint">?</button></div>
     <div class="note-sm" id="wlNote"></div>
 
     <div class="sec" data-i18n="set.secFx"></div>
-    <div class="row"><label data-i18n="set.fxNames"></label>
-      <div class="ctl"><button class="btn" id="fxClear" data-i18n="set.clearAll"></button>
-        <button class="btn" id="fxCopy" data-i18n="set.copy"></button></div>
+    <div class="row"><label data-i18n="set.show"></label>
+      <div class="ctl"><button class="sw" role="switch" aria-checked="false" id="fxBtn"></button></div>
       <button class="help" data-help="set.fxHint">?</button></div>
-    <textarea id="fxJson" spellcheck="false" placeholder='{"33":"Green Scream","113":"Hall Reverb"}'></textarea>
+
+    <div id="fxBox" hidden>
+      <div class="btnRow">
+        <button class="btn" id="fxClear" data-i18n="set.clearAll"></button>
+        <button class="btn" id="fxCopy" data-i18n="set.copy"></button>
+      </div>
+      <textarea id="fxJson" spellcheck="false" placeholder='{"33":"Green Scream","113":"Hall Reverb"}'></textarea>
+    </div>
 
     <div class="sec" data-i18n="set.secDebug"></div>
+    <div class="row"><label data-i18n="set.show"></label>
+      <div class="ctl"><button class="sw" role="switch" aria-checked="false" id="dbgBtn"></button></div>
+      <button class="help" data-help="set.debugHint">?</button></div>
+
+    <div id="dbgBox" hidden>
     <div class="row"><label data-i18n="set.traffic"></label>
       <div class="ctl"><span class="val" id="stats">–</span></div></div>
     <div class="row"><label data-i18n="set.demo"></label>
-      <div class="ctl"><button class="btn tgl" id="demoBtn">–</button></div>
+      <div class="ctl"><button class="sw" role="switch" aria-checked="false" id="demoBtn"></button></div>
       <button class="help" data-help="set.demoHint">?</button></div>
     <div class="note-sm" id="demoNote" hidden></div>
     <div class="row" id="watchRow" hidden><label data-i18n="set.watch"></label>
       <div class="ctl"><span class="val" id="watchState">–</span></div></div>
     <div class="row"><label data-i18n="set.midiLog"></label>
-      <div class="ctl"><button class="btn" id="monBtn" data-i18n="set.onOff"></button></div></div>
+      <div class="ctl"><button class="sw" role="switch" aria-checked="false" id="monBtn"></button></div></div>
     <div class="mon" id="mon" style="display:none"></div>
+    </div>
   </div>
 </div>
 
@@ -318,8 +348,16 @@ const POLL_MS   = 15000;  // Záloha, ne hlavní kanál. Beacon posílá změny 
                           // které neposílá Program Change. Při 3 s to dělalo
                           // 6 odpovědí/s, což je zbytečný provoz.
 let DIAG     = LS_BOOT('diag', false);      // výpis MIDI portů a zařízení
-let LIVE     = LS_BOOT('live', false);      // živá aktivita na zamčené obrazovce (jen iOS)
+// Živá aktivita na zamčené obrazovce. Vypnutá natvrdo: systém z pozadí
+// propustí jen pár aktualizací a dlaždice pak ukazuje starý rig — ověřeno
+// i s připojeným Kemperem, zamrzla po třech přepnutích. Celá implementace
+// zůstává v projektu; stačí sem vrátit true a řádek v nastavení se objeví.
+// Podrobnosti i postup měření jsou v LIVE.md.
+const LIVE_ENABLED = false;
+let LIVE = LIVE_ENABLED && LS_BOOT('live', false);
 let DEMO     = LS_BOOT('demo', false);      // vymyšlená data, když není po ruce Kemper
+let DEBUG    = LS_BOOT('debug', false);     // sekce Ladění; běžně není co řešit
+let FXBOX    = LS_BOOT('fxbox', false);     // ruční názvy efektů; jména posílá Kemper sám
 let BANKLIST = LS_BOOT('banklist', true);   // pruh s obsahem banky
 let TUNER_ON = LS_BOOT('tuner', false);   // bit 5 beaconu = posílej data ladičky.
    // Default vypnuto: Player pak hlásil tuner mode = on a celoobrazovková
@@ -396,7 +434,8 @@ cs:{
  'title.fullscreen':'Celá obrazovka','title.settings':'Nastavení',
  'tuner.close':'klepnutím zavřeš',
  'set.title':'Nastavení','set.close':'Zavřít','set.language':'Jazyk',
- 'set.secApp':'Aplikace', 'set.secConn':'Připojení', 'set.secView':'Zobrazení', 'set.secFx':'Názvy efektů', 'set.secDebug':'Ladění',
+ 'set.secApp':'Aplikace', 'set.secConn':'Připojení', 'set.secView':'Zobrazení', 'set.secFx':'Názvy efektů', 'set.secDebug':'Ladění', 'set.show':'Zobrazit',
+ 'set.debug':'Ladění','set.debugHint':'Demo režim, stav spojení s hodinkami a výpis MIDI provozu. Běžně tu není co řešit, proto je to schované.',
  'set.theme':'Motiv','set.themeSystem':'podle systému','set.themeLight':'světlý','set.themeDark':'tmavý',
  'set.midiIn':'MIDI vstup','set.midiOut':'MIDI výstup','set.choose':'— vyber —',
  'set.device':'Zařízení','set.deviceType':'Typ přístroje',
@@ -441,7 +480,8 @@ en:{
  'title.fullscreen':'Fullscreen','title.settings':'Settings',
  'tuner.close':'tap to close',
  'set.title':'Settings','set.close':'Close','set.language':'Language',
- 'set.secApp':'App', 'set.secConn':'Connection', 'set.secView':'Display', 'set.secFx':'Effect names', 'set.secDebug':'Debugging',
+ 'set.secApp':'App', 'set.secConn':'Connection', 'set.secView':'Display', 'set.secFx':'Effect names', 'set.secDebug':'Debugging', 'set.show':'Show',
+ 'set.debug':'Debugging','set.debugHint':'Demo mode, watch connection state and the MIDI traffic log. Hidden by default since there is normally nothing to look at.',
  'set.theme':'Theme','set.themeSystem':'system','set.themeLight':'light','set.themeDark':'dark',
  'set.midiIn':'MIDI input','set.midiOut':'MIDI output','set.choose':'— choose —',
  'set.device':'Device','set.deviceType':'Device type',
@@ -486,7 +526,8 @@ de:{
  'title.fullscreen':'Vollbild','title.settings':'Einstellungen',
  'tuner.close':'zum Schließen tippen',
  'set.title':'Einstellungen','set.close':'Schließen','set.language':'Sprache',
- 'set.secApp':'App', 'set.secConn':'Verbindung', 'set.secView':'Anzeige', 'set.secFx':'Effektnamen', 'set.secDebug':'Fehlersuche',
+ 'set.secApp':'App', 'set.secConn':'Verbindung', 'set.secView':'Anzeige', 'set.secFx':'Effektnamen', 'set.secDebug':'Fehlersuche', 'set.show':'Anzeigen',
+ 'set.debug':'Fehlersuche','set.debugHint':'Demo-Modus, Verbindungsstatus der Uhr und das MIDI-Protokoll. Standardmäßig ausgeblendet, weil es normalerweise nichts zu sehen gibt.',
  'set.theme':'Design','set.themeSystem':'System','set.themeLight':'hell','set.themeDark':'dunkel',
  'set.midiIn':'MIDI-Eingang','set.midiOut':'MIDI-Ausgang','set.choose':'— wählen —',
  'set.device':'Gerät','set.deviceType':'Gerätetyp',
@@ -549,8 +590,8 @@ function applyLang(){
   document.querySelectorAll('[data-i18n-ph]').forEach(e=> e.placeholder = t(e.dataset.i18nPh));
   el('themeSel').value = THEME;
   closeHints();
-  lockLabel(); editLabel(); tunLabel(); blLabel(); diagLabel(); liveLabel(); demoLabel();
-  stats(); render();
+  lockLabel(); editLabel(); tunLabel(); blLabel(); diagLabel(); liveLabel();
+  demoLabel(); debugLabel(); fxBoxLabel(); stats(); render();
   if(Transport.kind === 'web' && midiAccess) fillPorts();
   keepAwakeNote();
 }
@@ -911,12 +952,14 @@ function closeHints(){
 
 el('cfgBtn').onclick   = ()=>{ stats(); el('cfg').classList.add('show'); };
 el('cfgClose').onclick = ()=> el('cfg').classList.remove('show');
-el('monBtn').onclick   = ()=>{ const m=el('mon'); m.style.display = m.style.display==='none'?'block':'none'; };
-/// Přepínač vypadá stejně všude: text a zvýraznění, když je zapnutý.
+el('monBtn').onclick = ()=>{
+  const m = el('mon'), on = m.style.display === 'none';
+  m.style.display = on ? 'block' : 'none';
+  toggleBtn('monBtn', on);
+};
+/// Stav přepínače drží aria-checked; vzhled si z něj bere CSS.
 function toggleBtn(id, on){
-  const b = el(id);
-  b.textContent = t(on ? 'set.tunerOn' : 'set.tunerOff');
-  b.classList.toggle('on', on);
+  el(id).setAttribute('aria-checked', on ? 'true' : 'false');
 }
 function diagLabel(){
   toggleBtn('diagBtn', DIAG);
@@ -933,8 +976,22 @@ function sendLive(){
 }
 el('liveBtn').onclick = ()=>{ LIVE=!LIVE; LS.set('live',LIVE); liveLabel(); sendLive(); };
 
+function fxBoxLabel(){
+  toggleBtn('fxBtn', FXBOX);
+  el('fxBox').hidden = !FXBOX;
+}
+el('fxBtn').onclick = ()=>{ FXBOX=!FXBOX; LS.set('fxbox',FXBOX); fxBoxLabel(); };
+
+function debugLabel(){
+  toggleBtn('dbgBtn', DEBUG);
+  // Když běží demo, sekce zůstane otevřená — jinak by nešlo vypnout.
+  el('dbgBox').hidden = !(DEBUG || DEMO);
+}
+el('dbgBtn').onclick = ()=>{ DEBUG=!DEBUG; LS.set('debug',DEBUG); debugLabel(); };
+
 const demoLabel = ()=> toggleBtn('demoBtn', DEMO);
-el('demoBtn').onclick = ()=>{ DEMO=!DEMO; LS.set('demo',DEMO); demoLabel(); applyDemo(); };
+el('demoBtn').onclick = ()=>{ DEMO=!DEMO; LS.set('demo',DEMO); demoLabel();
+                              debugLabel(); applyDemo(); };
 
 const blLabel = ()=> toggleBtn('blBtn', BANKLIST);
 el('blBtn').onclick = ()=>{ BANKLIST=!BANKLIST; LS.set('banklist',BANKLIST); blLabel(); render(); };
@@ -1060,7 +1117,7 @@ function initNative(){
   // Kolik popudů z nativní strany stránka opravdu obsloužila.
   window.__demoStats = d => {
     const n = el('demoNote');
-    n.hidden = false;
+    n.hidden = !DIAG;
     n.textContent = t('demo.stats', d.ticks, d.evalOk, d.evalFail, d.state);
   };
 
@@ -1077,11 +1134,11 @@ function initNative(){
 
   el('portRow').hidden = true;
   el('devRow').hidden = false;
-  el('liveRow').hidden = false;
+  el('liveRow').hidden = !LIVE_ENABLED;
   liveLabel();
   setStatus('off', t('st.searching'));
   port.postMessage({op:'hello'});
-  sendLive();
+  sendLive();          // při vypnuté funkci tím zároveň uklidí starou dlaždici
 }
 
 /* ---------- Web MIDI (Android, desktop) ---------- */
